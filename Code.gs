@@ -44,6 +44,7 @@ function doPost(e) {
       case 'checkAdmin':  result = checkAdmin(p);       break;
       case 'saveResults': result = saveResults(p);      break;
       case 'saveConfig':  result = saveConfig(p);       break;
+      case 'deleteUser':  result = deleteUser(p);       break;
       default:            result = { error: `Unknown action: ${p.action}` };
     }
   } catch(err) {
@@ -150,6 +151,30 @@ function saveConfig(p) {
     upsertRow(ss, SHEET_CONFIG, 'prizes', ['prizes', JSON.stringify(payload.prizes)]);
 
   return { ok: true };
+}
+
+// ── DELETE USER (admin) ────────────────────────────────
+function deleteUser(p) {
+  if (!p.pw || p.pw !== getAdminPw()) return { error: 'Unauthorized' };
+  if (!p.userId) return { error: 'Missing userId' };
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  removeRow(ss, SHEET_USERS, p.userId);
+  removeRow(ss, SHEET_PREDS, p.userId);
+  return { ok: true };
+}
+
+function removeRow(ss, sheetName, keyValue) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return;
+  const last = sheet.getLastRow();
+  if (last < 2) return;
+  const col1 = sheet.getRange(2, 1, last - 1, 1).getValues();
+  for (let i = 0; i < col1.length; i++) {
+    if (col1[i][0] === keyValue) {
+      sheet.deleteRow(i + 2);
+      return;
+    }
+  }
 }
 
 // ── HELPERS ────────────────────────────────────────────

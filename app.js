@@ -1198,9 +1198,59 @@ function renderAdminContent() {
   renderAdminKoResultGrid(S.adminKoRound);
   renderPrizeInputs();
   updateHowtoPrizes();
+  renderAdminUsers();
 
   document.getElementById('save-prizes-btn')?.addEventListener('click', savePrizes);
   document.getElementById('admin-export-btn')?.addEventListener('click', exportCSV);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderAdminUsers() {
+  const wrap = document.getElementById('admin-users-list');
+  if (!wrap) return;
+  if (!S.allUsers.length) {
+    wrap.innerHTML = '<p style="color:var(--text-sub);font-size:13px">No players yet.</p>';
+    return;
+  }
+  wrap.innerHTML = S.allUsers.map(u => {
+    const safeName = escapeHtml(u.name || '(no name)');
+    return `
+      <div class="admin-user-row">
+        <div class="admin-user-info">
+          <div class="admin-user-name">${safeName}</div>
+          <div class="admin-user-id">${escapeHtml(u.id)}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm admin-user-delete" data-uid="${escapeHtml(u.id)}" data-name="${safeName}">🗑️ Remove</button>
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('.admin-user-delete').forEach(btn => {
+    btn.addEventListener('click', () => deleteUserAdmin(btn.dataset.uid, btn.dataset.name));
+  });
+}
+
+async function deleteUserAdmin(id, name) {
+  if (!confirm(`Remove "${name}"?\n\nThis deletes the account and all their predictions. Cannot be undone.`)) return;
+  if (!isBackendConfigured()) { showToast('Backend not configured', 'error'); return; }
+  if (!S.adminPw)             { showToast('Admin not unlocked', 'error'); return; }
+  try {
+    const form = new FormData();
+    form.append('action', 'deleteUser');
+    form.append('userId', id);
+    form.append('pw',     S.adminPw);
+    const res = await fetch(CONFIG.BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) throw new Error(data.error);
+    S.allUsers = S.allUsers.filter(u => u.id !== id);
+    delete S.allPredictions[id];
+    renderAdminUsers();
+    showToast(`Removed ${name}`, 'success');
+  } catch (e) {
+    showToast(`Delete failed: ${e.message}`, 'error');
+  }
 }
 
 function renderLockGrid() {
