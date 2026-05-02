@@ -1,0 +1,1924 @@
+'use strict';
+
+// ══════════════════════════════════════════════════════
+//  CONFIG  —  update BACKEND_URL after deploying Apps Script
+// ══════════════════════════════════════════════════════
+const CONFIG = {
+  // This site's own backend (the FAMILY Google Sheet / Apps Script).
+  // Paste the Web App URL after you deploy the family Apps Script.
+  BACKEND_URL:        'https://script.google.com/macros/s/AKfycbxlwymQDc3pvcmOZ_pQYRo2snrtczq1VsD1xHipeJqcrUX2pbV5jZoCn3gQkQyk5OXl5w/exec',
+  // Mirror admin writes (results / locks / prizes) to the OTHER site's backend too,
+  // so entering scores once updates BOTH the family and Sam Media poule.
+  MIRROR_BACKEND_URL: 'https://script.google.com/macros/s/AKfycbxjuCp1CSdBBEIlV3q4i8iQpCYwQ8bWBgR0381drxz6mfHNXBed11I0GgyOQlMIQr7X/exec',
+  // Simple shared password to enter the family poule (no SSO).
+  FAMILY_PASSWORD:    'vangaal2026',
+};
+
+
+const MAX_POSSIBLE = 358; // 216 group + 93 knockout + 49 bonus
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+const S = {
+  user:             null,
+  predictions:      {},   // { matchId: { home: n, away: n } }
+  bonusPredictions: {},   // { questionId: value }
+  koPredictions:    {},   // { r32: [{home,away,winner}…], … }
+  allUsers:         [],
+  allPredictions:   {},   // { userId: { group, bonus, ko } }
+  results:          {},   // { matchId: { home, away } } + ko_* + bonus_*
+  config:           { locked: {}, prizes: { p1:'TBA', p2:'TBA', p3:'TBA' } },
+  activeTab:        'leaderboard',
+  activeSub:        'group',
+  activeGroup:      'A',
+  activeKoRound:    'r32',
+  adminGroup:       'A',
+  adminKoRound:     'r32',
+  adminUnlocked:    false,
+  adminPw:          '',   // typed by admin, memory-only (never persisted)
+  saveTimer:        null,
+  backendOk:        false,
+  syncErrorShown:   false, // suppress repeat error toasts when backend is down
+};
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  loadLocal();
+
+  if (S.user) {
+    closeModal();
+    updateHeaderUser();
+    document.getElementById('admin-tab').style.display = '';
+  } else {
+    openModal();
+  }
+
+  buildColorPicker();
+  bindNav();
+  bindSubTabs();
+  bindModal();
+  bindAdmin();
+  buildKoRoundTabs();
+  buildAdminKoRoundTabs();
+
+  renderActiveView();
+
+  // Fetch remote data in background; re-render when ready
+  await fetchRemote();
+  renderActiveView();
+});
+
+// ══════════════════════════════════════════════════════
+//  PERSISTENCE — local storage
+// ══════════════════════════════════════════════════════
+function loadLocal() {
+  try {
+    S.user             = JSON.parse(localStorage.getItem('wc26_user'))    || null;
+    S.predictions      = JSON.parse(localStorage.getItem('wc26_preds'))   || {};
+    S.bonusPredictions = JSON.parse(localStorage.getItem('wc26_bonus'))   || {};
+    S.koPredictions    = JSON.parse(localStorage.getItem('wc26_ko'))      || {};
+    S.results          = JSON.parse(localStorage.getItem('wc26_results')) || {};
+    S.config           = JSON.parse(localStorage.getItem('wc26_config'))  || { locked: {}, prizes: { p1:'TBA', p2:'TBA', p3:'TBA' } };
+    // Migrate nickname into the persistent store if not already there
+    if (S.user?.id && S.user?.nickname) persistNickname(S.user.id, S.user.nickname);
+  } catch(e) { /* corrupted data — start fresh */ }
+}
+
+function persistNickname(userId, nickname) {
+  try {
+    const nicks = JSON.parse(localStorage.getItem('wc26_nicknames') || '{}');
+    nicks[userId] = nickname;
+    localStorage.setItem('wc26_nicknames', JSON.stringify(nicks));
+  } catch(e) {}
+}
+
+function lookupUserByName(name) {
+  try {
+    const map = JSON.parse(localStorage.getItem('wc26_users_by_name') || '{}');
+    return map[name] || null;
+  } catch(e) { return null; }
+}
+
+function persistUserByName(name, user) {
+  try {
+    const map = JSON.parse(localStorage.getItem('wc26_users_by_name') || '{}');
+    map[name] = { id: user.id, nickname: user.nickname, color: user.color };
+    localStorage.setItem('wc26_users_by_name', JSON.stringify(map));
+  } catch(e) {}
+}
+
+function lookupNickname(userId) {
+  try {
+    return JSON.parse(localStorage.getItem('wc26_nicknames') || '{}')[userId] || '';
+  } catch(e) { return ''; }
+}
+
+function saveLocal() {
+  localStorage.setItem('wc26_user',    JSON.stringify(S.user));
+  localStorage.setItem('wc26_preds',   JSON.stringify(S.predictions));
+  localStorage.setItem('wc26_bonus',   JSON.stringify(S.bonusPredictions));
+  localStorage.setItem('wc26_ko',      JSON.stringify(S.koPredictions));
+  localStorage.setItem('wc26_results', JSON.stringify(S.results));
+  localStorage.setItem('wc26_config',  JSON.stringify(S.config));
+}
+
+// ══════════════════════════════════════════════════════
+//  PERSISTENCE — remote (Google Apps Script)
+// ══════════════════════════════════════════════════════
+function isBackendConfigured() {
+  return CONFIG.BACKEND_URL && !CONFIG.BACKEND_URL.startsWith('YOUR_');
+}
+
+function isMirrorConfigured() {
+  return CONFIG.MIRROR_BACKEND_URL && !CONFIG.MIRROR_BACKEND_URL.startsWith('YOUR_');
+}
+
+// Fire-and-forget POST to mirror backend so admin entries propagate to BOTH
+// poules (family + Sam Media). Errors are swallowed — primary save is what
+// the UI confirms; mirror is best-effort.
+function mirrorAdminWrite(qs) {
+  if (!isMirrorConfigured() || !S.adminPw) return;
+  fetch(`${CONFIG.MIRROR_BACKEND_URL}?${qs}`, { redirect: 'follow' })
+    .catch(e => console.warn('Mirror write failed:', e.message));
+}
+
+async function fetchRemote() {
+  if (!isBackendConfigured()) return;
+  try {
+    const res  = await fetch(`${CONFIG.BACKEND_URL}?action=getAll`, { redirect: 'follow' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    S.backendOk      = true;
+    S.allUsers       = data.users        || [];
+    S.allPredictions = data.predictions  || {};
+    S.results        = data.results      || {};
+    S.config         = data.config       || S.config;
+
+    // Update modal player count
+    const count = S.allUsers.length;
+    const sub = document.getElementById('modal-player-count');
+    if (sub) sub.textContent = `Family poule · ${count} ${count === 1 ? 'player' : 'players'}`;
+
+    // Merge: our local predictions might be newer than server
+    if (S.user) {
+      const server = S.allPredictions[S.user.id] || {};
+      // keep local if server has nothing for us yet
+      if (!server.group) server.group = S.predictions;
+      if (!server.bonus) server.bonus = S.bonusPredictions;
+      if (!server.ko)    server.ko    = S.koPredictions;
+    }
+    saveLocal();
+  } catch(e) {
+    console.warn('Remote fetch failed:', e.message);
+  }
+}
+
+async function syncRemote() {
+  if (!isBackendConfigured() || !S.user) return;
+  setStatus('saving');
+  try {
+    const form = new FormData();
+    form.append('action',  'sync');
+    form.append('userId',  S.user.id);
+    form.append('name',    S.user.nickname || S.user.name.split(' ')[0]);
+    form.append('color',   S.user.color || '#7DC242');   // always a hex — never the photo URL
+    form.append('avatar',  S.user.picture || '');        // photo URL in separate field
+    form.append('email',   S.user.email || '');          // Google email for reminders
+    form.append('group',   JSON.stringify(S.predictions));
+    form.append('bonus',   JSON.stringify(S.bonusPredictions));
+    form.append('ko',      JSON.stringify(S.koPredictions));
+    const res = await fetch(CONFIG.BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    S.syncErrorShown = false;
+    setStatus('saved');
+  } catch(e) {
+    console.warn('Sync failed:', e.message);
+    setStatus('error');
+    if (!S.syncErrorShown) {
+      S.syncErrorShown = true;
+      setTimeout(() => setStatus('idle'), 4000);
+    } else {
+      setTimeout(() => setStatus('idle'), 1200);
+    }
+  }
+}
+
+async function syncRemoteResults() {
+  if (!isBackendConfigured() || !S.adminPw) return;
+  const qs = new URLSearchParams({
+    action:  'saveResults',
+    payload: JSON.stringify(S.results),
+    pw:      S.adminPw,
+  }).toString();
+  await fetch(`${CONFIG.BACKEND_URL}?${qs}`, { redirect: 'follow' });
+  mirrorAdminWrite(qs);
+}
+
+async function syncRemoteConfig() {
+  if (!isBackendConfigured()) throw new Error('Backend not configured');
+  if (!S.adminPw)             throw new Error('Admin not unlocked — enter the admin password first');
+
+  const form = new FormData();
+  form.append('action',  'saveConfig');
+  form.append('payload', JSON.stringify({ locked: S.config.locked, prizes: S.config.prizes }));
+  form.append('pw',      S.adminPw);
+  const res = await fetch(CONFIG.BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' });
+  if (!res.ok) throw new Error(`Backend HTTP ${res.status}`);
+  const data = await res.json().catch(() => ({}));
+  if (data.error) throw new Error(data.error);
+
+  // Mirror locks ONLY — prizes are intentionally site-specific (different prizes
+  // at work vs. home).
+  const qs = new URLSearchParams({
+    action:  'saveConfig',
+    payload: JSON.stringify({ locked: S.config.locked }),
+    pw:      S.adminPw,
+  }).toString();
+  mirrorAdminWrite(qs);
+}
+
+function debouncedSave() {
+  setStatus('saving');
+  clearTimeout(S.saveTimer);
+  S.saveTimer = setTimeout(() => {
+    saveLocal();
+    syncRemote();
+  }, 1200);
+}
+
+// ══════════════════════════════════════════════════════
+//  STATUS BAR
+// ══════════════════════════════════════════════════════
+function setStatus(state) {
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  const map = { saving: ['saving','Saving…'], saved: ['saved','✓ Saved'], error: ['error','⚠ Error'], idle: ['',''] };
+  const [cls, txt] = map[state] || map.idle;
+  el.className = `save-status ${cls}`;
+  el.textContent = txt;
+  if (state === 'saved') setTimeout(() => el.textContent = '', 3000);
+}
+
+// ══════════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════════
+function bindNav() {
+  document.querySelectorAll('.nav-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+}
+
+function switchTab(tab) {
+  S.activeTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${tab}`));
+  renderActiveView();
+}
+
+function bindSubTabs() {
+  document.querySelectorAll('.sub-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      S.activeSub = btn.dataset.sub;
+      document.querySelectorAll('.sub-tab').forEach(b => b.classList.toggle('active', b.dataset.sub === S.activeSub));
+      document.querySelectorAll('.sub-view').forEach(v => v.classList.toggle('active', v.id === `sub-${S.activeSub}`));
+      renderActiveSub();
+    });
+  });
+}
+
+function renderActiveView() {
+  switch (S.activeTab) {
+    case 'leaderboard':  renderLeaderboard(); break;
+    case 'predictions':  renderActiveSub();   break;
+    case 'bonus':        renderBonus();        break;
+    case 'browse':       renderBrowse();       break;
+    case 'admin':        renderAdmin();        break;
+    case 'howto':        break;  // static content, no JS needed
+  }
+}
+
+function renderActiveSub() {
+  if (S.activeSub === 'group')    renderGroupStage();
+  if (S.activeSub === 'knockout') renderKnockout();
+}
+
+// ══════════════════════════════════════════════════════
+//  SCORE CALCULATION ENGINE
+// ══════════════════════════════════════════════════════
+function calcScore(userId) {
+  const isSelf = S.user && userId === S.user.id;
+  const preds  = isSelf ? S.predictions      : (S.allPredictions[userId]?.group || {});
+  const bonus  = isSelf ? S.bonusPredictions : (S.allPredictions[userId]?.bonus || {});
+  const ko     = isSelf ? S.koPredictions    : (S.allPredictions[userId]?.ko    || {});
+
+  let groupPts = 0, koPts = 0, bonusPts = 0;
+
+  // Group stage
+  WC.matches.forEach(m => {
+    const p = preds[m.id];
+    const r = S.results[m.id];
+    if (!p || !r || r.home === '' || r.away === '') return;
+    const ph = +p.home, pa = +p.away, rh = +r.home, ra = +r.away;
+    if (ph === rh && pa === ra) {
+      groupPts += WC.scoring.groupExact;
+    } else if (Math.sign(ph - pa) === Math.sign(rh - ra)) {
+      groupPts += WC.scoring.groupResult;
+    }
+  });
+
+  // Knockout rounds
+  WC.koRounds.forEach(round => {
+    const rResults = S.results[`ko_${round.id}`] || [];
+    const rPreds   = ko[round.id]                || [];
+    rResults.forEach((res, i) => {
+      if (!res?.winner) return;
+      if (rPreds[i]?.winner === res.winner) koPts += round.pts;
+    });
+  });
+
+  // Bonus questions
+  WC.bonusQuestions.forEach(q => {
+    const p = bonus[q.id];
+    const r = S.results[`bonus_${q.id}`];
+    if (!p || r === undefined || r === null || r === '') return;
+
+    if (q.id === 'total_goals') {
+      const diff = Math.abs(+p - +r);
+      if (diff <= 3)  bonusPts += WC.scoring.bonus.total_goals_3;
+      else if (diff <= 8)  bonusPts += WC.scoring.bonus.total_goals_8;
+      else if (diff <= 15) bonusPts += WC.scoring.bonus.total_goals_15;
+    } else if (q.id === 'red_card_final') {
+      if (p === r) bonusPts += WC.scoring.bonus.red_card_final;
+    } else {
+      const key = q.id;
+      const pts = WC.scoring.bonus[key] || 0;
+      if (p.toString().toLowerCase() === r.toString().toLowerCase()) bonusPts += pts;
+    }
+  });
+
+  return { group: groupPts, ko: koPts, bonus: bonusPts, total: groupPts + koPts + bonusPts };
+}
+
+function countFilled(userId) {
+  const isSelf = S.user && userId === S.user.id;
+  const preds = isSelf ? S.predictions : (S.allPredictions[userId]?.group || {});
+  return WC.matches.filter(m => {
+    const p = preds[m.id];
+    return p && p.home !== undefined && p.away !== undefined;
+  }).length;
+}
+
+function calcGroupStandings(groupId, userId) {
+  const group = WC.groups.find(g => g.id === groupId);
+  const isSelf = S.user && userId === S.user.id;
+  const preds = isSelf ? S.predictions : (S.allPredictions[userId]?.group || {});
+
+  const tbl = {};
+  group.teams.forEach(c => { tbl[c] = { code: c, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }; });
+
+  WC.matchesByGroup[groupId].forEach(m => {
+    const p = preds[m.id];
+    if (!p || p.home === undefined) return;
+    const h = +p.home, a = +p.away;
+    tbl[m.home].mp++; tbl[m.away].mp++;
+    tbl[m.home].gf += h; tbl[m.home].ga += a;
+    tbl[m.away].gf += a; tbl[m.away].ga += h;
+    if (h > a) {
+      tbl[m.home].w++; tbl[m.home].pts += 3; tbl[m.away].l++;
+    } else if (h < a) {
+      tbl[m.away].w++; tbl[m.away].pts += 3; tbl[m.home].l++;
+    } else {
+      tbl[m.home].d++; tbl[m.home].pts++;
+      tbl[m.away].d++; tbl[m.away].pts++;
+    }
+  });
+
+  return Object.values(tbl).sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if ((b.gf - b.ga) !== (a.gf - a.ga)) return (b.gf - b.ga) - (a.gf - a.ga);
+    return b.gf - a.gf;
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  LEADERBOARD VIEW
+// ══════════════════════════════════════════════════════
+function renderLeaderboard() {
+  // Prizes — set value + team kit background
+  // Popular team kits: Portugal 🇵🇹, Argentina 🇦🇷, France 🇫🇷
+  const PRIZE_TEAMS = {
+    p1: { team: 'POR', name: 'Portugal', kit: 'linear-gradient(135deg, #FF0000 25%, #FF0000 25%, #840000 25%, #840000 50%, #FF0000 50%, #FF0000 75%, #840000 75%)' },
+    p2: { team: 'ARG', name: 'Argentina', kit: 'linear-gradient(180deg, #6CACC5 0%, #6CACC5 50%, #FFFFFF 50%, #FFFFFF 100%)' },
+    p3: { team: 'FRA', name: 'France', kit: 'linear-gradient(180deg, #002395 50%, #FFFFFF 50%, #FFFFFF 50%, #ED2939 50%)' },
+  };
+  ['1','2','3'].forEach(n => {
+    const key = `p${n}`;
+    const el = document.getElementById(`prize-${n}`);
+    if (el) {
+      el.textContent = S.config.prizes?.[key] || '—';
+      el.classList.add('editable');
+    }
+    const bg  = document.getElementById(`ph-bg-${n}`);
+    const cfg = PRIZE_TEAMS[key];
+    if (bg && cfg) {
+      bg.style.background   = cfg.kit;
+      bg.style.backgroundSize = 'cover';
+    }
+  });
+
+  // Build ranked user list
+  const allUserIds = new Set();
+  if (S.user) allUserIds.add(S.user.id);
+  S.allUsers.forEach(u => allUserIds.add(u.id));
+
+  const getUserObj = id => {
+    if (S.user && id === S.user.id) return S.user;
+    return S.allUsers.find(u => u.id === id) || { id, name: 'Unknown', color: '#555' };
+  };
+
+  const ranked = [...allUserIds].map(id => {
+    const score  = calcScore(id);
+    const filled = countFilled(id);
+    return { ...getUserObj(id), score, filled };
+  }).sort((a, b) => b.score.total - a.score.total || b.filled - a.filled);
+
+  // Stats
+  const totalParticipants = ranked.length;
+  document.getElementById('lb-participant-count').textContent =
+    `${totalParticipants} ${totalParticipants === 1 ? 'participant' : 'participants'}`;
+
+  const statsEl = document.getElementById('lb-stats');
+  const maxScore = ranked[0]?.score.total || 0;
+  statsEl.innerHTML = `
+    <div class="stat-pill"><div class="val">${totalParticipants}</div><div class="lbl">Participants</div></div>
+    <div class="stat-pill"><div class="val">${maxScore}</div><div class="lbl">Highest score</div></div>
+    <div class="stat-pill"><div class="val">${Object.keys(S.results).filter(k => !k.startsWith('ko_') && !k.startsWith('bonus_')).length}</div><div class="lbl">Results in</div></div>
+    <div class="stat-pill"><div class="val">${WC.matches.length - Object.keys(S.results).filter(k => !k.startsWith('ko_') && !k.startsWith('bonus_')).length}</div><div class="lbl">Matches left</div></div>
+  `;
+
+  // List
+  const list = document.getElementById('leaderboard-list');
+  if (ranked.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="emoji">⚽</div><h3>Be the first!</h3><p>Sign in and make your predictions to appear on the leaderboard.</p></div>`;
+    return;
+  }
+
+  const topScore = Math.max(...ranked.map(u => u.score.total), 1);
+
+  list.innerHTML = ranked.map((u, i) => {
+    const rank = i + 1;
+    const isMe = S.user && u.id === S.user.id;
+    const rankClass = rank <= 3 ? `rank-${rank}` : '';
+    const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+    const barW = Math.round((u.score.total / topScore) * 100);
+
+    return `
+    <div class="lb-row${isMe ? ' me' : ''}" data-userid="${u.id}" onclick="showUserInBrowse('${u.id}')">
+      <div class="lb-rank ${rankClass}">${rankEmoji}</div>
+      <div class="lb-user">
+        ${avatarHtml(u, 42)}
+        <div>
+          <div class="lb-name">${esc(displayName(u))}${isMe ? ' <span style="font-size:11px;color:var(--green)">(you)</span>' : ''}</div>
+          <div class="lb-sub">${u.score.group}G · ${u.score.ko}K · ${u.score.bonus}B pts</div>
+        </div>
+      </div>
+      <div>
+        <div class="lb-bar-wrap"><div class="lb-bar" style="width:${barW}%"></div></div>
+        <div class="lb-sub" style="text-align:right;margin-top:3px">${u.filled}/72 filled</div>
+      </div>
+      <div class="lb-pts">${u.score.total} pts</div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  GROUP STAGE VIEW
+// ══════════════════════════════════════════════════════
+function renderGroupStage() {
+  if (!S.user) { renderLoginPrompt('group-content'); return; }
+
+  // Build group selector buttons if not yet done
+  const sel = document.getElementById('group-selector');
+  if (!sel.children.length) {
+    sel.innerHTML = WC.groups.map(g => `
+      <button class="group-btn${g.id === S.activeGroup ? ' active' : ''}" onclick="selectGroup('${g.id}')">
+        Group ${g.id}
+      </button>`).join('');
+  } else {
+    sel.querySelectorAll('.group-btn').forEach(b =>
+      b.classList.toggle('active', b.textContent.trim() === `Group ${S.activeGroup}`));
+  }
+
+  renderGroupContent(S.activeGroup);
+}
+
+function selectGroup(id) {
+  S.activeGroup = id;
+  renderGroupStage();
+}
+
+function renderGroupContent(groupId) {
+  const el    = document.getElementById('group-content');
+  const group = WC.groups.find(g => g.id === groupId);
+  const matches = WC.matchesByGroup[groupId];
+  const locked  = S.config.locked?.group;
+
+  // Progress for this group
+  const filled = matches.filter(m => S.predictions[m.id] !== undefined).length;
+
+  // Group matches by round
+  const byRound = { 1: [], 2: [], 3: [] };
+  matches.forEach(m => byRound[m.round].push(m));
+
+  const roundNames = { 1: 'Round 1', 2: 'Round 2', 3: 'Round 3 (simultaneous)' };
+
+  const matchCards = [1, 2, 3].map(r => `
+    <div class="match-label" style="margin-top:${r > 1 ? '20px' : '0'}">${roundNames[r]}</div>
+    ${byRound[r].map(m => matchCard(m, locked)).join('')}
+  `).join('');
+
+  const standings = calcGroupStandings(groupId, S.user.id);
+  const standingsHtml = renderStandingsTable(standings, groupId);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-size:18px;font-weight:700">Group ${groupId}</div>
+      <div class="progress-mini">
+        <div class="progress-track"><div class="progress-fill" style="width:${Math.round(filled/6*100)}%"></div></div>
+        <span>${filled}/6 filled</span>
+      </div>
+    </div>
+    ${matchCards}
+    ${standingsHtml}
+  `;
+
+  // Bind events
+  el.querySelectorAll('.score-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { matchid, side, dir } = btn.dataset;
+      adjustScore(matchid, side, +dir);
+    });
+  });
+}
+
+function matchCard(m, locked) {
+  const pred   = S.predictions[m.id] || { home: 0, away: 0 };
+  const result = S.results[m.id];
+  const home   = WC.teams[m.home];
+  const away   = WC.teams[m.away];
+  const h      = pred.home ?? 0;
+  const a      = pred.away ?? 0;
+
+  const winClass  = h > a ? 'home-win' : h < a ? 'away-win' : 'draw';
+  const winLabel  = h > a ? home.name : h < a ? away.name : 'Draw';
+  const homeCls   = h > a ? 'winning' : '';
+  const awayCls   = h < a ? 'winning' : '';
+
+  let resultLine = '';
+  if (result && result.home !== undefined && result.away !== undefined) {
+    const rh = +result.home, ra = +result.away;
+    const exact  = +h === rh && +a === ra;
+    const correct = Math.sign(h - a) === Math.sign(rh - ra);
+    resultLine = `
+      <div class="actual-result">
+        <span>Result: ${rh}–${ra}</span>
+        <span class="${exact ? 'correct' : correct ? 'correct' : 'incorrect'}">
+          ${exact ? `+${WC.scoring.groupExact}pts ✓` : correct ? `+${WC.scoring.groupResult}pt ✓` : '0pts ✗'}
+        </span>
+      </div>`;
+  }
+
+  return `
+  <div class="match-card${locked ? ' locked' : ''}${result ? ' has-result' : ''}" id="mc-${m.id}">
+    <div class="match-label">Group ${m.group} · Round ${m.round}</div>
+    <div class="match-row">
+      <div class="team-side">
+        <div class="team-flag">${home.flag}</div>
+        <div class="team-name ${homeCls}">${home.name}</div>
+      </div>
+
+      <div class="score-block">
+        <div class="score-ctrl">
+          <button class="score-btn" data-matchid="${m.id}" data-side="home" data-dir="1">+</button>
+          <div class="score-num" id="sn-${m.id}-home">${h}</div>
+          <button class="score-btn" data-matchid="${m.id}" data-side="home" data-dir="-1">−</button>
+        </div>
+        <div class="score-sep">:</div>
+        <div class="score-ctrl">
+          <button class="score-btn" data-matchid="${m.id}" data-side="away" data-dir="1">+</button>
+          <div class="score-num" id="sn-${m.id}-away">${a}</div>
+          <button class="score-btn" data-matchid="${m.id}" data-side="away" data-dir="-1">−</button>
+        </div>
+      </div>
+
+      <div class="team-side">
+        <div class="team-flag">${away.flag}</div>
+        <div class="team-name ${awayCls}">${away.name}</div>
+      </div>
+    </div>
+
+    <div class="match-footer">
+      <span class="result-badge ${winClass}">${winLabel}</span>
+      ${resultLine}
+    </div>
+  </div>`;
+}
+
+function adjustScore(matchId, side, dir) {
+  if (!S.predictions[matchId]) S.predictions[matchId] = { home: 0, away: 0 };
+  const cur = S.predictions[matchId][side] ?? 0;
+  const next = Math.max(0, cur + dir);
+  S.predictions[matchId][side] = next;
+
+  // Update DOM only (no full re-render for snappy UX)
+  const numEl = document.getElementById(`sn-${matchId}-${side}`);
+  if (numEl) numEl.textContent = next;
+
+  // Update winning class
+  const match = WC.matchById[matchId];
+  if (match) {
+    const card = document.getElementById(`mc-${matchId}`);
+    if (card) {
+      const h = S.predictions[matchId].home ?? 0;
+      const a = S.predictions[matchId].away ?? 0;
+      const homeNameEl = card.querySelector('.team-side:first-child .team-name');
+      const awayNameEl = card.querySelector('.team-side:last-child .team-name');
+      const badgeEl    = card.querySelector('.result-badge');
+      if (homeNameEl) homeNameEl.className = `team-name${h > a ? ' winning' : ''}`;
+      if (awayNameEl) awayNameEl.className = `team-name${a > h ? ' winning' : ''}`;
+      if (badgeEl) {
+        const home = WC.teams[match.home], away = WC.teams[match.away];
+        badgeEl.className = `result-badge ${h > a ? 'home-win' : h < a ? 'away-win' : 'draw'}`;
+        badgeEl.textContent = h > a ? home.name : h < a ? away.name : 'Draw';
+      }
+    }
+  }
+
+  debouncedSave();
+}
+
+function renderStandingsTable(standings, groupId) {
+  const rows = standings.map((t, i) => {
+    const team    = WC.teams[t.code];
+    const gd      = t.gf - t.ga;
+    const qualCls = i < 2 ? 'qualifies' : i === 2 ? 'qualifies-3rd' : '';
+    return `
+    <tr class="${qualCls}">
+      <td><div class="std-team"><span>${team.flag}</span><span>${team.name}</span></div></td>
+      <td>${t.mp}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
+      <td>${t.gf}</td><td>${t.ga}</td><td>${gd >= 0 ? '+' : ''}${gd}</td>
+      <td class="std-pts">${t.pts}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div class="standings-card" style="margin-top:20px">
+    <div class="standings-title">📊 Predicted Standings — Group ${groupId}
+      <span style="float:right;font-weight:400;color:var(--text-dim)">
+        <span style="color:var(--green)">■</span> Advance  <span style="color:var(--yellow)">■</span> Possible 3rd
+      </span>
+    </div>
+    <table class="standings-table">
+      <thead>
+        <tr>
+          <th style="text-align:left">Team</th>
+          <th>MP</th><th>W</th><th>D</th><th>L</th>
+          <th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  KNOCKOUT VIEW — Visual Bracket
+// ══════════════════════════════════════════════════════
+function buildKoRoundTabs() { /* replaced by full bracket — kept for compat */ }
+
+function renderKnockout() {
+  if (!S.user) { renderLoginPrompt('ko-content'); return; }
+  // Init any missing rounds
+  WC.koRounds.forEach(r => {
+    if (!S.koPredictions[r.id])
+      S.koPredictions[r.id] = Array.from({length: r.matches}, () => ({home:'',away:'',winner:''}));
+  });
+  cascadeWinners();
+  renderBracket();
+}
+
+function cascadeWinners() {
+  const get = (r, i) => S.koPredictions[r]?.[i] || {home:'',away:'',winner:''};
+  const setSlot = (r, i, h, a) => {
+    const rnd = WC.koRounds.find(x => x.id === r);
+    if (!S.koPredictions[r])
+      S.koPredictions[r] = Array.from({length: rnd.matches}, () => ({home:'',away:'',winner:''}));
+    const slot = S.koPredictions[r][i];
+    slot.home = h; slot.away = a;
+    if (slot.winner && slot.winner !== h && slot.winner !== a) slot.winner = '';
+  };
+  // R32 → R16 (pair of 2 → 1)
+  for (let i = 0; i < 8; i++)
+    setSlot('r16', i, get('r32', i*2).winner, get('r32', i*2+1).winner);
+  // R16 → QF
+  for (let i = 0; i < 4; i++)
+    setSlot('qf', i, get('r16', i*2).winner, get('r16', i*2+1).winner);
+  // QF → SF
+  for (let i = 0; i < 2; i++)
+    setSlot('sf', i, get('qf', i*2).winner, get('qf', i*2+1).winner);
+  // SF winners → Final
+  setSlot('final', 0, get('sf',0).winner, get('sf',1).winner);
+  // SF losers → 3rd Place
+  const loser = s => s.winner ? (s.winner === s.home ? s.away : s.home) : '';
+  setSlot('third', 0, loser(get('sf',0)), loser(get('sf',1)));
+}
+
+function renderBracket() {
+  const lkd = id => !!S.config.locked?.[id];
+  const col  = (roundId, from, to, hasSelects) =>
+    `<div class="bkt-col" data-round="${roundId}">
+       ${bktColHdr(roundId)}
+       ${Array.from({length: to-from}, (_, i) => bktCard(roundId, from+i, hasSelects, lkd(roundId))).join('')}
+     </div>`;
+
+  document.getElementById('ko-content').innerHTML = `
+    <div class="bkt-toolbar">
+      <button class="btn btn-ghost btn-sm" onclick="autoFillKo()">⚡ Auto-fill R32 from groups</button>
+      <span class="bkt-hint">Pick winners — they cascade through the bracket automatically</span>
+    </div>
+    <div class="bkt-scroll">
+      <div class="bkt-tree">
+        ${col('r32', 0,  8,  true)}
+        ${col('r16', 0,  4,  false)}
+        ${col('qf',  0,  2,  false)}
+        ${col('sf',  0,  1,  false)}
+        <div class="bkt-center-col">
+          <div class="bkt-center-lbl">🏆 Final</div>
+          ${bktCard('final', 0, false, lkd('final'))}
+          <div class="bkt-center-lbl" style="margin-top:20px">🥉 3rd Place</div>
+          ${bktCard('third', 0, false, lkd('third'))}
+        </div>
+        ${col('sf',  1,  2,  false)}
+        ${col('qf',  2,  4,  false)}
+        ${col('r16', 4,  8,  false)}
+        ${col('r32', 8, 16,  true)}
+      </div>
+    </div>`;
+
+  // Bind team selects (R32 only)
+  document.getElementById('ko-content').querySelectorAll('.bkt-sel').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const {round, idx, side} = sel.dataset;
+      setKoTeam(round, +idx, side, sel.value);
+    });
+  });
+  // Bind score inputs
+  document.getElementById('ko-content').querySelectorAll('.bkt-score-in').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const {round, idx, side} = inp.dataset;
+      setKoScore(round, +idx, side, inp.value);
+    });
+  });
+
+  // Auto-scale to fit viewport (no scrollbar)
+  fitBracket();
+}
+
+function fitBracket() {
+  const wrap = document.querySelector('.bkt-scroll');
+  const tree = wrap?.querySelector('.bkt-tree');
+  if (!wrap || !tree) return;
+  // Reset transforms before measuring
+  tree.style.transform = '';
+  wrap.style.height    = '';
+  const wrapW    = wrap.clientWidth;
+  const naturalW = tree.scrollWidth;
+  const scale    = Math.min(1, (wrapW - 4) / naturalW);
+
+  // Below 55% scale the bracket becomes unreadable — switch to horizontal scroll instead
+  if (scale < 0.55) {
+    tree.style.transform   = '';
+    wrap.style.overflowX   = 'auto';
+    wrap.style.height      = `${tree.offsetHeight}px`;
+    wrap.style.paddingBottom = '12px';
+  } else {
+    wrap.style.overflowX      = 'hidden';
+    wrap.style.paddingBottom  = '';
+    tree.style.transformOrigin = 'top left';
+    tree.style.transform       = `scale(${scale})`;
+    wrap.style.height          = `${tree.offsetHeight * scale}px`;
+  }
+}
+
+// Re-fit on window resize when knockout is visible
+window.addEventListener('resize', () => {
+  if (S.activeTab === 'predictions' && S.activeSub === 'knockout') fitBracket();
+});
+
+function setKoScore(roundId, idx, side, val) {
+  if (!S.koPredictions[roundId]) return;
+  S.koPredictions[roundId][idx][side] = val;
+  debouncedSave();
+}
+
+function bktColHdr(roundId) {
+  const r = WC.koRounds.find(x => x.id === roundId);
+  const locked = S.config.locked?.[roundId];
+  return `<div class="bkt-col-hdr">
+    <span class="bkt-col-name">${r.name}</span>
+    <span class="bkt-col-pts">${locked ? '🔒' : `+${r.pts}pts`}</span>
+  </div>`;
+}
+
+function bktCard(roundId, idx, hasSelects, locked) {
+  const r    = WC.koRounds.find(x => x.id === roundId);
+  const slot = S.koPredictions[roundId]?.[idx] || {home:'',away:'',winner:'',hScore:'',aScore:''};
+  const h    = slot.home ? WC.teams[slot.home] : null;
+  const a    = slot.away ? WC.teams[slot.away] : null;
+  const hw   = slot.winner && slot.winner === slot.home;
+  const aw   = slot.winner && slot.winner === slot.away;
+  const mNum = r.startMatch != null ? `M${r.startMatch + idx}` : r.short;
+  const isDraw = slot.hScore !== '' && slot.aScore !== '' && +slot.hScore === +slot.aScore;
+
+  // Score input cell (always present unless locked)
+  const scoreInput = (side) => locked
+    ? `<span class="bkt-score-display">${slot[side] !== '' ? slot[side] : '–'}</span>`
+    : `<input type="number" class="bkt-score-in" min="0" max="20"
+              data-round="${roundId}" data-idx="${idx}" data-side="${side}"
+              value="${slot[side] !== '' ? slot[side] : ''}" placeholder="–" inputmode="numeric" />`;
+
+  const teamRow = (side, team, isWinner) => {
+    const teamCell = (hasSelects && !locked)
+      ? `<select class="bkt-sel" data-round="${roundId}" data-idx="${idx}" data-side="${side}">
+           <option value="">— Pick team —</option>
+           ${teamOptions(slot[side])}
+         </select>`
+      : `<div class="bkt-slot${team ? ' filled' : ''}${isWinner ? ' winner' : ''}">
+           ${team
+             ? `<span class="bkt-flag">${team.flag}</span><span class="bkt-tname">${team.name}</span>`
+             : `<span class="bkt-tbd">TBD</span>`}
+         </div>`;
+    return `<div class="bkt-team-line">${teamCell}${scoreInput(side === 'home' ? 'hScore' : 'aScore')}</div>`;
+  };
+
+  // Winner row: always show if both teams set (so user can pick after a draw)
+  const winnerRow = h && a && !locked ? `
+    <div class="bkt-winner-row">
+      <button class="bkt-flag-btn${hw ? ' chosen' : ''}" title="${h.name} advances"
+              onclick="quickPickWinner('${roundId}',${idx},'${slot.home}')">
+        ${h.flag}
+      </button>
+      <span class="bkt-adv">${isDraw ? 'on pens →' : 'advances'}</span>
+      <button class="bkt-flag-btn${aw ? ' chosen' : ''}" title="${a.name} advances"
+              onclick="quickPickWinner('${roundId}',${idx},'${slot.away}')">
+        ${a.flag}
+      </button>
+    </div>` : '';
+
+  return `<div class="bkt-card${hw||aw ? ' has-winner' : ''}">
+    <div class="bkt-card-top">
+      <span class="bkt-mnum">${mNum}</span>
+      ${locked ? '<span class="bkt-lock">🔒</span>' : ''}
+    </div>
+    ${teamRow('home', h, hw)}
+    ${teamRow('away', a, aw)}
+    ${winnerRow}
+  </div>`;
+}
+
+function quickPickWinner(roundId, idx, teamCode) {
+  if (!S.koPredictions[roundId]) return;
+  S.koPredictions[roundId][idx].winner = teamCode;
+  cascadeWinners();
+  debouncedSave();
+  renderBracket();
+}
+
+function setKoTeam(roundId, idx, side, teamCode) {
+  if (!S.koPredictions[roundId]) return;
+  S.koPredictions[roundId][idx][side] = teamCode;
+  S.koPredictions[roundId][idx].winner = '';
+  cascadeWinners();
+  debouncedSave();
+  renderBracket();
+}
+
+function autoFillKo() {
+  const tops = {};
+  WC.groups.forEach(g => {
+    const s = calcGroupStandings(g.id, S.user.id);
+    tops[g.id] = { first: s[0]?.code || '', second: s[1]?.code || '' };
+  });
+  const r32Pairs = [
+    [tops.A?.first, tops.B?.second], [tops.C?.first, tops.D?.second],
+    [tops.E?.first, tops.F?.second], [tops.G?.first, tops.H?.second],
+    [tops.I?.first, tops.J?.second], [tops.K?.first, tops.L?.second],
+    [tops.B?.first, tops.A?.second], [tops.D?.first, tops.C?.second],
+    [tops.F?.first, tops.E?.second], [tops.H?.first, tops.G?.second],
+    [tops.J?.first, tops.I?.second], [tops.L?.first, tops.K?.second],
+    [tops.A?.first, tops.C?.second], [tops.B?.first, tops.D?.second],
+    [tops.E?.first, tops.G?.second], [tops.F?.first, tops.H?.second],
+  ];
+  S.koPredictions.r32 = r32Pairs.map(([h, a]) => ({home: h||'', away: a||'', winner: ''}));
+  cascadeWinners();
+  debouncedSave();
+  renderBracket();
+  showToast('Bracket auto-filled from your group predictions!', 'success');
+}
+
+// ══════════════════════════════════════════════════════
+//  BONUS VIEW
+// ══════════════════════════════════════════════════════
+function renderBonus() {
+  if (!S.user) { renderLoginPromptInView('bonus-grid'); return; }
+
+  const grid = document.getElementById('bonus-grid');
+  grid.innerHTML = WC.bonusQuestions.map(q => bonusCard(q)).join('');
+
+  // Wire up inputs
+  grid.querySelectorAll('[data-qid]').forEach(el => {
+    const event = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(event, () => {
+      S.bonusPredictions[el.dataset.qid] = el.value;
+      debouncedSave();
+    });
+  });
+
+  grid.querySelectorAll('.bool-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qid = btn.dataset.qid;
+      const val = btn.dataset.val;
+      S.bonusPredictions[qid] = val;
+      // Update UI
+      btn.closest('.bool-toggle').querySelectorAll('.bool-btn').forEach(b => {
+        b.classList.remove('selected-yes', 'selected-no');
+      });
+      btn.classList.add(val === 'yes' ? 'selected-yes' : 'selected-no');
+      debouncedSave();
+    });
+  });
+}
+
+function bonusCard(q) {
+  const val  = S.bonusPredictions[q.id] || '';
+  const links = q.links.map(l => `<a class="odds-link" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join('');
+
+  let input = '';
+  if (q.type === 'team') {
+    input = `<select class="bonus-input" data-qid="${q.id}">
+      <option value="">— Select team —</option>
+      ${WC.teamList.map(t => `<option value="${t.code}" ${val === t.code ? 'selected' : ''}>${t.flag} ${t.name}</option>`).join('')}
+    </select>`;
+  } else if (q.type === 'player') {
+    input = `<input class="bonus-input" type="text" data-qid="${q.id}"
+               value="${esc(val)}" placeholder="Player name…" />`;
+  } else if (q.type === 'number') {
+    input = `<input class="bonus-input" type="number" data-qid="${q.id}"
+               value="${val}" placeholder="e.g. 280" min="0" max="500" />`;
+  } else if (q.type === 'boolean') {
+    const yesClass = val === 'yes' ? 'selected-yes' : '';
+    const noClass  = val === 'no'  ? 'selected-no'  : '';
+    input = `<div class="bool-toggle">
+      <button class="bool-btn ${yesClass}" data-qid="${q.id}" data-val="yes">✅ Yes</button>
+      <button class="bool-btn ${noClass}"  data-qid="${q.id}" data-val="no">❌ No</button>
+    </div>`;
+  }
+
+  const ptsDisplay = typeof q.points === 'number' ? `${q.points} pts` : q.points;
+
+  return `
+  <div class="bonus-card">
+    <div class="bonus-card-top">
+      <span class="bonus-emoji">${q.emoji}</span>
+      <span class="bonus-pts">${ptsDisplay}</span>
+    </div>
+    <div class="bonus-question">${q.question}</div>
+    <div class="bonus-tip">${q.tip}</div>
+    ${input}
+    ${links ? `<div class="bonus-links">${links}</div>` : ''}
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  BROWSE VIEW
+// ══════════════════════════════════════════════════════
+function renderBrowse() {
+  renderUserGrid('');
+  const search = document.getElementById('browse-search');
+  if (search) {
+    search.oninput = () => renderUserGrid(search.value.toLowerCase());
+  }
+}
+
+function renderUserGrid(filter) {
+  const allIds = new Set();
+  if (S.user) allIds.add(S.user.id);
+  S.allUsers.forEach(u => allIds.add(u.id));
+
+  const getUserObj = id => {
+    if (S.user && id === S.user.id) return S.user;
+    return S.allUsers.find(u => u.id === id) || { id, name: 'Unknown', color: '#555' };
+  };
+
+  const filtered = [...allIds]
+    .map(id => getUserObj(id))
+    .filter(u => !filter || displayName(u).toLowerCase().includes(filter));
+
+  const el = document.getElementById('browse-users');
+  if (filtered.length === 0) {
+    el.innerHTML = !isBackendConfigured()
+      ? `<div class="empty-state" style="grid-column:1/-1"><div class="emoji">🔗</div><h3>Backend not connected</h3><p>Connect Google Sheets to see everyone's predictions.</p></div>`
+      : `<div style="color:var(--text-sub);padding:20px">No users found.</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(u => {
+    const score = calcScore(u.id);
+    const isMe  = S.user && u.id === S.user.id;
+    return `
+    <div class="browse-user-card${isMe ? ' me' : ''}" onclick="viewUserPredictions('${u.id}')">
+      ${avatarHtml(u, 32)}
+      <div class="browse-user-info">
+        <div class="browse-user-name">${esc(displayName(u))}${isMe ? ' (you)' : ''}</div>
+        <div class="browse-user-pts">${score.total} pts · ${countFilled(u.id)}/72</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function viewUserPredictions(userId) {
+  const getUserObj = id => {
+    if (S.user && id === S.user.id) return S.user;
+    return S.allUsers.find(u => u.id === id) || { id, name: '?', color: '#555' };
+  };
+
+  const user = getUserObj(userId);
+  const isSelf = S.user && userId === S.user.id;
+  const preds  = isSelf ? S.predictions      : (S.allPredictions[userId]?.group || {});
+  const bonus  = isSelf ? S.bonusPredictions : (S.allPredictions[userId]?.bonus || {});
+  const score  = calcScore(userId);
+
+  const detail = document.getElementById('browse-detail');
+
+  // Group predictions table
+  const groupRows = WC.groups.map(g => {
+    const matches = WC.matchesByGroup[g.id];
+    return matches.map(m => {
+      const p    = preds[m.id];
+      const res  = S.results[m.id];
+      const home = WC.teams[m.home], away = WC.teams[m.away];
+      const predTxt = p ? `${p.home}–${p.away}` : '—';
+      const resTxt  = res ? `${res.home}–${res.away}` : '—';
+      let pts = '', cls = 'pred-empty';
+      if (p && res) {
+        const ph = +p.home, pa = +p.away, rh = +res.home, ra = +res.away;
+        if (ph === rh && pa === ra) { pts = `+${WC.scoring.groupExact}`; cls = 'pred-correct'; }
+        else if (Math.sign(ph-pa) === Math.sign(rh-ra)) { pts = `+${WC.scoring.groupResult}`; cls = 'pred-partial'; }
+        else { pts = '0'; cls = 'pred-incorrect'; }
+      }
+      return `
+      <tr>
+        <td>${home.flag} ${home.name} vs ${away.flag} ${away.name}</td>
+        <td><span class="pred-score ${cls}">${predTxt}</span></td>
+        <td style="color:var(--text-sub)">${resTxt}</td>
+        <td><span class="${cls}">${pts}</span></td>
+      </tr>`;
+    }).join('');
+  }).join('');
+
+  // Bonus answers
+  const bonusRows = WC.bonusQuestions.map(q => {
+    const p = bonus[q.id] || '—';
+    const r = S.results[`bonus_${q.id}`];
+    let display = p;
+    if (q.type === 'team' && p !== '—') {
+      const t = WC.teams[p];
+      display = t ? `${t.flag} ${t.name}` : p;
+    }
+    return `<tr>
+      <td>${q.emoji} ${q.question}</td>
+      <td><strong>${esc(display)}</strong></td>
+      <td style="color:var(--text-sub)">${r || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  detail.innerHTML = `
+  <div style="margin-bottom:32px;scroll-margin-top:80px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      ${avatarHtml(user, 40)}
+      <div>
+        <div style="font-size:18px;font-weight:700">${esc(displayName(user))}</div>
+        <div style="color:var(--text-sub);font-size:13px">${score.total} pts · ${countFilled(userId)}/72 matches filled</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeBrowseDetail()">✕ Close</button>
+    </div>
+
+    <div class="compare-table-wrap" style="margin-bottom:24px">
+      <table class="compare-table">
+        <thead><tr><th>Match</th><th>Prediction</th><th>Result</th><th>Points</th></tr></thead>
+        <tbody>${groupRows}</tbody>
+      </table>
+    </div>
+
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">⭐ Bonus Predictions</div>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead><tr><th>Question</th><th>Answer</th><th>Actual</th></tr></thead>
+        <tbody>${bonusRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+  detail.firstElementChild?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeBrowseDetail() {
+  document.getElementById('browse-detail').innerHTML = '';
+}
+
+function showUserInBrowse(userId) {
+  switchTab('browse');
+  viewUserPredictions(userId);
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN VIEW
+// ══════════════════════════════════════════════════════
+function bindAdmin() {
+  document.getElementById('admin-login-btn')?.addEventListener('click', unlockAdmin);
+  document.getElementById('admin-pw-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') unlockAdmin();
+  });
+}
+
+async function unlockAdmin() {
+  const btn = document.getElementById('admin-login-btn');
+  const pw  = document.getElementById('admin-pw-input').value;
+  if (!pw) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+
+  try {
+    if (!isBackendConfigured()) throw new Error('no-backend');
+    const form = new FormData();
+    form.append('action', 'checkAdmin');
+    form.append('pw', pw);
+    const res  = await fetch(CONFIG.BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' });
+    const data = await res.json();
+    if (data.error) throw new Error('bad-password');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Unlock';
+    showToast(e.message === 'bad-password' ? 'Incorrect password' : 'Cannot reach backend', 'error');
+    return;
+  }
+
+  S.adminPw       = pw;
+  S.adminUnlocked = true;
+  btn.disabled    = false;
+  btn.textContent = 'Unlock';
+  document.getElementById('admin-gate-wrap').style.display = 'none';
+  document.getElementById('admin-content').style.display   = 'block';
+  document.getElementById('admin-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  renderAdminContent();
+}
+
+function renderAdmin() {
+  if (S.adminUnlocked) renderAdminContent();
+}
+
+function renderAdminContent() {
+  renderLockGrid();
+  renderAdminGroupSelector();
+  renderAdminResultGrid(S.adminGroup);
+  renderAdminKoResultGrid(S.adminKoRound);
+  renderPrizeInputs();
+  updateHowtoPrizes();
+
+  document.getElementById('save-prizes-btn')?.addEventListener('click', savePrizes);
+  document.getElementById('admin-export-btn')?.addEventListener('click', exportCSV);
+}
+
+function renderLockGrid() {
+  const grid = document.getElementById('lock-grid');
+  if (!grid) return;
+  const rounds = [
+    { id: 'group', label: 'Group Stage' },
+    ...WC.koRounds.map(r => ({ id: r.id, label: r.name })),
+  ];
+  grid.innerHTML = rounds.map(r => `
+    <div class="lock-item">
+      <span class="lock-label">${r.label}</span>
+      <label class="toggle-switch">
+        <input type="checkbox" ${S.config.locked?.[r.id] ? 'checked' : ''}
+               onchange="toggleLock('${r.id}', this.checked)" />
+        <span class="toggle-slider"></span>
+      </label>
+      <span style="font-size:12px;color:var(--text-dim)">${S.config.locked?.[r.id] ? '🔒 Locked' : '🔓 Open'}</span>
+    </div>`).join('');
+}
+
+function toggleLock(roundId, locked) {
+  if (!S.config.locked) S.config.locked = {};
+  S.config.locked[roundId] = locked;
+  saveLocal();
+  syncRemoteConfig();
+  showToast(`${roundId} ${locked ? 'locked 🔒' : 'unlocked 🔓'}`, 'info');
+  renderLockGrid();
+}
+
+function renderAdminGroupSelector() {
+  const sel = document.getElementById('admin-group-selector');
+  if (!sel) return;
+  sel.innerHTML = WC.groups.map(g => `
+    <button class="group-btn${g.id === S.adminGroup ? ' active' : ''}"
+            onclick="selectAdminGroup('${g.id}')">Group ${g.id}</button>`).join('');
+}
+
+function selectAdminGroup(id) {
+  S.adminGroup = id;
+  renderAdminGroupSelector();
+  renderAdminResultGrid(id);
+}
+
+function renderAdminResultGrid(groupId) {
+  const el = document.getElementById('admin-result-grid');
+  if (!el) return;
+  const matches = WC.matchesByGroup[groupId];
+  el.innerHTML = matches.map(m => {
+    const res = S.results[m.id] || {};
+    const home = WC.teams[m.home], away = WC.teams[m.away];
+    return `
+    <div class="result-entry-card">
+      <div class="result-entry-label">Group ${m.group} R${m.round} · ${home.flag} vs ${away.flag}</div>
+      <div class="result-entry-row">
+        <span>${home.name}</span>
+        <input type="number" id="adm-${m.id}-home" value="${res.home ?? ''}" min="0" max="20"
+               onchange="saveResult('${m.id}','home',this.value)" />
+        <span>–</span>
+        <input type="number" id="adm-${m.id}-away" value="${res.away ?? ''}" min="0" max="20"
+               onchange="saveResult('${m.id}','away',this.value)" />
+        <span>${away.name}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveResult(matchId, side, value) {
+  if (!S.results[matchId]) S.results[matchId] = {};
+  S.results[matchId][side] = value === '' ? undefined : +value;
+  saveLocal();
+  syncRemoteResults();
+}
+
+function buildAdminKoRoundTabs() {
+  const el = document.getElementById('admin-ko-round-tabs');
+  if (!el) return;
+  el.innerHTML = WC.koRounds.map(r => `
+    <button class="ko-round-btn${r.id === S.adminKoRound ? ' active' : ''}"
+            onclick="selectAdminKoRound('${r.id}')">
+      ${r.short}
+    </button>`).join('');
+}
+
+function selectAdminKoRound(id) {
+  S.adminKoRound = id;
+  document.querySelectorAll('#admin-ko-round-tabs .ko-round-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim() === WC.koRounds.find(r => r.id === id).short);
+  });
+  renderAdminKoResultGrid(id);
+}
+
+function renderAdminKoResultGrid(roundId) {
+  const el    = document.getElementById('admin-ko-result-grid');
+  if (!el) return;
+  const round = WC.koRounds.find(r => r.id === roundId);
+  const resArr = S.results[`ko_${roundId}`] || Array(round.matches).fill(null);
+
+  el.innerHTML = Array.from({ length: round.matches }, (_, i) => {
+    const res  = resArr[i] || {};
+    const team = teamOptions(res.winner || '');
+    return `
+    <div class="result-entry-card">
+      <div class="result-entry-label">${round.name} · Match ${i + 1}</div>
+      <div class="result-entry-row">
+        <span>Winner:</span>
+        <select style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px"
+                onchange="saveKoResult('${roundId}',${i},this.value)">
+          ${team}
+        </select>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveKoResult(roundId, idx, winner) {
+  if (!S.results[`ko_${roundId}`]) S.results[`ko_${roundId}`] = [];
+  if (!S.results[`ko_${roundId}`][idx]) S.results[`ko_${roundId}`][idx] = {};
+  S.results[`ko_${roundId}`][idx].winner = winner;
+  saveLocal();
+  syncRemoteResults();
+}
+
+function renderPrizeInputs() {
+  ['1','2','3'].forEach(n => {
+    const el = document.getElementById(`prize-input-${n}`);
+    if (el) el.value = S.config.prizes?.[`p${n}`] || '';
+  });
+}
+
+async function savePrizes() {
+  const btn = document.getElementById('save-prizes-btn');
+  const prev = S.config.prizes;
+  S.config.prizes = {
+    p1: document.getElementById('prize-input-1')?.value || 'TBA',
+    p2: document.getElementById('prize-input-2')?.value || 'TBA',
+    p3: document.getElementById('prize-input-3')?.value || 'TBA',
+  };
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await syncRemoteConfig();
+    saveLocal();
+    updateHowtoPrizes();
+    showToast('Prizes saved to server!', 'success');
+  } catch (e) {
+    S.config.prizes = prev;
+    renderPrizeInputs();
+    showToast(`Save failed: ${e.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save prizes'; }
+  }
+}
+
+function updateHowtoPrizes() {
+  ['1','2','3'].forEach(n => {
+    const el = document.getElementById(`howto-prize-${n}`);
+    if (el) {
+      const val = S.config.prizes?.[`p${n}`] || '';
+      el.textContent = val || 'Prize TBA (set by admin)';
+    }
+  });
+}
+
+function exportCSV() {
+  const allIds = new Set([
+    ...(S.user ? [S.user.id] : []),
+    ...S.allUsers.map(u => u.id),
+  ]);
+  const getUserObj = id => {
+    if (S.user && id === S.user.id) return S.user;
+    return S.allUsers.find(u => u.id === id) || { name: 'Unknown' };
+  };
+
+  const rows = [['Name','Group Pts','Knockout Pts','Bonus Pts','Total','Filled']];
+  [...allIds].forEach(id => {
+    const u = getUserObj(id);
+    const s = calcScore(id);
+    rows.push([u.name, s.group, s.ko, s.bonus, s.total, countFilled(id)]);
+  });
+
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'wc2026-scores.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════
+//  GOOGLE SSO
+// ══════════════════════════════════════════════════════
+function initGoogleSSO() {
+  const hasClientId = CONFIG.GOOGLE_CLIENT_ID && !CONFIG.GOOGLE_CLIENT_ID.startsWith('YOUR_');
+
+  if (!hasClientId) {
+    // Client ID not configured — fall back to manual name/colour login
+    document.getElementById('sso-block').style.display = 'none';
+    document.getElementById('manual-login-block').style.display = '';
+    buildColorPicker();
+    return;
+  }
+
+  // Wait for the GSI library to load then render the button
+  const tryInit = () => {
+    if (typeof google === 'undefined') { setTimeout(tryInit, 150); return; }
+    google.accounts.id.initialize({
+      client_id:   CONFIG.GOOGLE_CLIENT_ID,
+      callback:    handleGoogleSignIn,
+      hd:          'sam-media.com',   // restrict to sam-media.com workspace
+      auto_select: false,
+    });
+    const btnEl = document.getElementById('google-signin-btn');
+    if (btnEl) {
+      google.accounts.id.renderButton(btnEl, {
+        theme:          'filled_black',
+        size:           'large',
+        shape:          'rectangular',
+        text:           'signin_with',
+        logo_alignment: 'left',
+        width:          280,
+      });
+    }
+  };
+  tryInit();
+}
+
+window.handleGoogleSignIn = function(response) {
+  try {
+    // Decode JWT payload (no library needed — just base64url decode)
+    const b64 = response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(b64));
+
+    if (!payload.email?.endsWith('@sam-media.com')) {
+      showToast('Please use your @sam-media.com Google account', 'error');
+      return;
+    }
+
+    const userId = `g_${payload.sub}`;
+    // Look up nickname from persistent store (survives sign-out)
+    // Also fall back to wc26_user in case they never signed out
+    const existing = JSON.parse(localStorage.getItem('wc26_user') || 'null');
+    const existingNick = lookupNickname(userId)
+      || (existing?.id === userId ? existing.nickname : '')
+      || '';
+
+    S.user = {
+      id:       userId,
+      name:     payload.name,
+      email:    payload.email,
+      picture:  payload.picture || '',
+      color:    '#7DC242',
+      nickname: existingNick || '',
+    };
+
+    saveLocal();
+    // Show nickname step — only skip if they already have one
+    if (S.user.nickname) {
+      closeModal();
+      updateHeaderUser();
+      document.getElementById('admin-tab').style.display = '';
+      syncRemote();
+      renderActiveView();
+      showToast(`Welcome back, ${S.user.nickname}! ⚽`, 'success');
+    } else {
+      showNicknameStep(payload.given_name || payload.name.split(' ')[0]);
+    }
+  } catch(e) {
+    console.error('SSO error', e);
+    showToast('Sign-in failed — please try again', 'error');
+  }
+};
+
+function signOut() {
+  if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+  // Save nickname before wiping the session
+  if (S.user?.id && S.user?.nickname) persistNickname(S.user.id, S.user.nickname);
+  S.user = null;
+  localStorage.removeItem('wc26_user');
+  closeUserMenu();
+  updateHeaderUser();
+  document.getElementById('admin-tab').style.display = 'none';
+  openModal();
+  renderActiveView();
+}
+
+// Returns the name to display publicly for any user object
+function displayName(user) {
+  if (!user) return '?';
+  if (S.user && user.id === S.user.id) return S.user.nickname || S.user.name.split(' ')[0];
+  return user.name || user.id;   // for other users, name IS their stored nickname
+}
+
+function showNicknameStep(suggestedName) {
+  // Hide SSO/manual blocks, show nickname block
+  document.getElementById('sso-block').style.display = 'none';
+  document.getElementById('manual-login-block').style.display = 'none';
+  document.getElementById('nickname-block').style.display = '';
+  const input = document.getElementById('nickname-input');
+  if (input) { input.value = suggestedName || ''; input.focus(); input.select(); }
+}
+
+function saveNickname(isChange = false) {
+  const input = document.getElementById('nickname-input');
+  const nick  = input?.value.trim();
+  if (!nick) { input?.focus(); showToast('Please enter a nickname', 'error'); return; }
+  if (nick.length > 20) { showToast('Max 20 characters', 'error'); return; }
+
+  S.user.nickname = nick;
+  persistNickname(S.user.id, nick);
+  saveLocal();
+  closeModal();
+  // Reset modal to SSO block for next open
+  document.getElementById('nickname-block').style.display = 'none';
+  document.getElementById('sso-block').style.display = '';
+  updateHeaderUser();
+  document.getElementById('admin-tab').style.display = '';
+  syncRemote();
+  renderActiveView();
+  showToast(isChange ? `Nickname updated to "${nick}" ✓` : `Let's go, ${nick}! ⚽`, 'success');
+}
+
+function changeNickname() {
+  closeUserMenu();
+  const current = S.user?.nickname || S.user?.name?.split(' ')[0] || '';
+  const next = prompt('New nickname (max 20 characters):', current);
+  if (next === null) return;
+  const nick = next.trim().slice(0, 20);
+  if (!nick) { showToast('Nickname cannot be empty', 'error'); return; }
+  S.user.nickname = nick;
+  persistNickname(S.user.id, nick);
+  saveLocal();
+  updateHeaderUser();
+  syncRemote();
+  renderActiveView();
+  showToast(`Nickname updated to "${nick}" ✓`, 'success');
+}
+
+// ══════════════════════════════════════════════════════
+//  MODAL (Login)
+// ══════════════════════════════════════════════════════
+function buildColorPicker() {
+  const AVATAR_COLORS = [
+    '#7DC242','#3B82F6','#EC4899','#F97316','#8B5CF6',
+    '#06B6D4','#EF4444','#10B981','#F59E0B','#6366F1',
+  ];
+  const el = document.getElementById('color-picker');
+  if (!el) return;
+  const selected = S.user?.color || AVATAR_COLORS[0];
+  el.innerHTML = AVATAR_COLORS.map(c => `
+    <div class="color-dot${c === selected ? ' selected' : ''}"
+         style="background:${c}" data-color="${c}"
+         onclick="pickColor(this,'${c}')"></div>`).join('');
+}
+
+function pickColor(el, color) {
+  document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+  el.classList.add('selected');
+  if (S.user) { S.user.color = color; updateHeaderUser(); }
+}
+
+function openModal() {
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('login-name')?.focus();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function openUserMenu() {
+  const menu = document.getElementById('user-menu');
+  if (!menu || !S.user) return;
+  document.getElementById('user-menu-name').textContent  = displayName(S.user);
+  document.getElementById('user-menu-email').textContent = S.user.email || S.user.name;
+  menu.style.display = '';
+  // close on outside click
+  setTimeout(() => document.addEventListener('click', closeUserMenuOnOutside, { once: true }), 0);
+}
+
+function closeUserMenu() {
+  const menu = document.getElementById('user-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+function closeUserMenuOnOutside(e) {
+  if (!document.getElementById('user-menu')?.contains(e.target)) closeUserMenu();
+}
+
+function bindModal() {
+  // Family manual login
+  const btn  = document.getElementById('login-btn');
+  const name = document.getElementById('login-name');
+  const nick = document.getElementById('login-nickname');
+  const pw   = document.getElementById('login-family-pw');
+
+  // Pre-fill nickname + color when a returning user types their name
+  name?.addEventListener('input', () => {
+    const existing = lookupUserByName(name.value.trim());
+    if (existing) {
+      nick.value = existing.nickname || '';
+      const dot = document.querySelector(`.color-dot[data-color="${existing.color}"]`);
+      document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+      dot?.classList.add('selected');
+    }
+  });
+
+  btn?.addEventListener('click', registerUser);
+  [name, nick, pw].forEach(el => el?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') registerUser();
+  }));
+
+  // Header user button — open menu if logged in, modal if not
+  document.getElementById('user-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (S.user) openUserMenu();
+    else openModal();
+  });
+}
+
+function registerUser() {
+  const nameEl     = document.getElementById('login-name');
+  const nickEl     = document.getElementById('login-nickname');
+  const pwEl       = document.getElementById('login-family-pw');
+  const name       = nameEl?.value.trim();
+  const nickname   = nickEl?.value.trim();
+  const familyPw   = pwEl?.value;
+
+  if (!name)     { nameEl?.focus(); showToast('Please enter your name', 'error'); return; }
+  if (!nickname) { nickEl?.focus(); showToast('Please enter a nickname', 'error'); return; }
+  if (familyPw !== CONFIG.FAMILY_PASSWORD) {
+    pwEl?.focus();
+    showToast('Wrong family password', 'error');
+    return;
+  }
+
+  const selectedDot = document.querySelector('.color-dot.selected');
+  const color = selectedDot?.dataset.color || '#7DC242';
+
+  // Returning user? Look them up by name to reuse their stable ID, nickname, color
+  const existing = lookupUserByName(name);
+
+  if (existing) {
+    S.user = { ...S.user, id: existing.id, name, nickname: existing.nickname, color: existing.color, email: '' };
+  } else {
+    const newId = `u_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+    S.user = S.user
+      ? { ...S.user, id: newId, name, nickname, color }
+      : { id: newId, name, nickname, color, email: '' };
+    persistUserByName(name, S.user);
+  }
+
+  persistNickname(S.user.id, S.user.nickname);
+  saveLocal();
+  closeModal();
+  updateHeaderUser();
+  document.getElementById('admin-tab').style.display = '';
+  syncRemote();
+  renderActiveView();
+  showToast(`Welcome${existing ? ' back' : ''}, ${S.user.nickname}! 🎉`, 'success');
+}
+
+function updateHeaderUser() {
+  const av = document.getElementById('header-avatar');
+  const nm = document.getElementById('header-name');
+
+  if (!S.user) {
+    if (av) { av.innerHTML = '?'; av.style.background = '#333'; }
+    if (nm) nm.textContent = 'Sign in';
+    return;
+  }
+
+  if (av) {
+    if (S.user.picture) {
+      av.innerHTML = `<img src="${S.user.picture}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+      av.style.background = 'transparent';
+    } else {
+      const initials = S.user.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+      av.innerHTML = initials;
+      av.style.background = S.user.color || '#7DC242';
+    }
+  }
+  if (nm) nm.textContent = displayName(S.user);
+}
+
+// ══════════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════════
+function showToast(msg, type = 'info') {
+  const el  = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function avatarHtml(user, size = 28) {
+  const displayStr = user.nickname || user.name || '?';
+  const initials = displayStr.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+  const profilePhoto = getProfilePhoto(user);
+  if (profilePhoto) {
+    return `<img class="avatar" src="assets/${profilePhoto}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover" alt="${esc(displayStr)}" />`;
+  }
+  return `<div class="avatar" style="background:${user.color};width:${size}px;height:${size}px;font-size:${Math.floor(size*0.4)}px">${initials}</div>`;
+}
+
+const PROFILE_PHOTOS = {
+  storm:  'Storm profile.png',
+  mumba:  'Mumba profile.png',
+  temwa:  'Temwa profile.png',
+  jorg:   'Jorg profile.png',
+  nimon:  'Nimon profile.png',
+  tezya:  'Tezya profile.png',
+  lwande: 'Lwande profile.png',
+};
+
+function getProfilePhoto(user) {
+  const key = (user.nickname || user.name || '').toLowerCase().replace(/\s+/g, '');
+  return PROFILE_PHOTOS[key] || null;
+}
+
+function teamOptions(selected = '') {
+  const none = `<option value="">— Select team —</option>`;
+  const opts = WC.teamList.map(t =>
+    `<option value="${t.code}" ${selected === t.code ? 'selected' : ''}>${t.flag} ${t.name}</option>`
+  ).join('');
+  return none + opts;
+}
+
+function renderLoginPrompt(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = `<div class="empty-state"><div class="emoji">👋</div><h3>Sign in to predict</h3><p>Click your name in the top-right corner to get started.</p><button class="btn btn-primary" onclick="openModal()">Sign in</button></div>`;
+}
+
+function renderLoginPromptInView(containerId) {
+  renderLoginPrompt(containerId);
+}
+
+// ══════════════════════════════════════════════════════
+//  LIVE SCORES — API-Football integration
+// ══════════════════════════════════════════════════════
+const LIVE = {
+  API_KEY:    '',          // Add your RapidAPI key here
+  RAPID_HOST: 'api-football1.p.rapidapi.com',
+  POLL_MS:    60000,       // Poll every 60s
+  interval:   null,
+  active:     false,
+  demoMode:   false,
+
+  async fetch(path, queryParams = {}) {
+    if (!this.API_KEY) return null;
+    const qs = new URLSearchParams(queryParams).toString();
+    const url = `https://${this.RAPID_HOST}${path}${qs ? '?' + qs : ''}`;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'x-rapidapi-key':  this.API_KEY,
+          'x-rapidapi-host': this.RAPID_HOST,
+        },
+        redirect: 'follow',
+      });
+      return res.ok ? await res.json() : null;
+    } catch { return null; }
+  },
+
+  async getFixtures(fixtureId = null) {
+    const params = { league: '8', season: '2026' };
+    if (fixtureId) params.id = fixtureId;
+    const data = await this.fetch('/fixtures', params);
+    return data?.response || [];
+  },
+
+  async pollLiveScores() {
+    if (!this.active) return;
+    const fixtures = await this.getFixtures();
+    const now = Date.now();
+    let updated = false;
+
+    fixtures.forEach(fix => {
+      const { id, league, teams, goals, fixture: f } = fix;
+      const matchId = String(id);
+      const status = f?.status?.short || '';
+      const homeScore = goals?.home ?? null;
+      const awayScore = goals?.away ?? null;
+
+      // Only process if we have scores and match is final/timed
+      if (homeScore == null) return;
+
+      const wasEmpty = !S.results[matchId];
+      const changed  = S.results[matchId]?.home !== homeScore
+                    || S.results[matchId]?.away !== awayScore;
+
+      if (changed) {
+        S.results[matchId] = { home: homeScore, away: awayScore };
+        localStorage.setItem('wc26_results', JSON.stringify(S.results));
+        updated = true;
+      }
+
+      // Auto-lock: match is finished (FT, AET, PEN)
+      const isFinished = ['FT', 'AET', 'PEN', 'PEN'].includes(status);
+      if (isFinished && wasEmpty) {
+        const roundId = WC.matches.find(m => String(m.id) === matchId)?.round;
+        if (roundId) {
+          S.config.locked[roundId] = true;
+          syncRemoteConfig();
+        }
+      }
+    });
+
+    if (updated) {
+      renderLeaderboard();
+      renderBracket();
+      this.showLiveBadge(fixtures.filter(f => ['1H','2H','HT','ET','PEN'].includes(f.fixture?.status?.short)));
+    }
+  },
+
+  start() {
+    if (this.interval) return;
+    this.active = true;
+    this.pollLiveScores(); // immediate first poll
+    this.interval = setInterval(() => this.pollLiveScores(), this.POLL_MS);
+    console.log('[LiveScores] Started — polling every', this.POLL_MS / 1000, 's');
+  },
+
+  stop() {
+    this.active = false;
+    if (this.interval) { clearInterval(this.interval); this.interval = null; }
+    console.log('[LiveScores] Stopped');
+  },
+
+  showLiveBadge(liveMatches) {
+    const badge = document.getElementById('live-badge');
+    if (!badge) return;
+    if (liveMatches.length > 0) {
+      badge.style.display = 'flex';
+      badge.innerHTML = `🔴 LIVE — ${liveMatches.length} match${liveMatches.length > 1 ? 'es' : ''} in progress`;
+    } else {
+      badge.style.display = 'none';
+    }
+  },
+
+  init() {
+    // Manual mode — scores are entered by admin in the Results panel
+    // No API polling, no demo mode
+    console.log('[LiveScores] Manual mode — use Admin > Results to enter scores');
+  },
+
+  // Map API fixture IDs to app match IDs
+  // API-Football uses numeric fixture IDs; app uses group+num like "A1", "r32_0", etc.
+  // Override this map with real IDs once you have them from the API
+  getAppMatchId(apiId) {
+    // For now, demo only — real integration needs a mapping table
+    return null;
+  },
+
+  startDemo() {
+    this.demoMode = true;
+    this.active = true;
+    // Demo: simulate 2 group matches and 1 KO match
+    const demoMatches = [
+      { id: 'A1', home: 1, away: 0, minute: 23, round: 'group' },
+      { id: 'B2', home: 0, away: 2, minute: 67, round: 'group' },
+    ];
+    const badge = document.getElementById('live-badge') || this.createLiveBadge();
+    badge.style.display = 'flex';
+    badge.innerHTML = '🟡 DEMO — Live scores simulation mode (no API key)';
+
+    this.interval = setInterval(() => {
+      if (!this.active) return;
+      demoMatches.forEach(m => {
+        if (Math.random() > 0.6) {
+          m.home = Math.min(m.home + (Math.random() > 0.5 ? 1 : 0), 5);
+          m.away = Math.min(m.away + (Math.random() > 0.5 ? 1 : 0), 4);
+          S.results[m.id] = { home: m.home, away: m.away };
+        }
+        m.minute = Math.min(m.minute + 1, 90);
+      });
+      localStorage.setItem('wc26_results', JSON.stringify(S.results));
+      renderLeaderboard();
+      if (document.getElementById('bracket-view')) renderBracket();
+      if (document.getElementById('predictions-view')) renderGroupView();
+      const m = demoMatches[0];
+      badge.innerHTML = `🟡 DEMO — ${m.home}-${m.away} (${m.minute}') · Click to stop`;
+    }, 5000);
+    console.log('[LiveScores] Demo mode started — 5s update interval');
+  },
+
+  createLiveBadge() {
+    const el = document.createElement('div');
+    el.id = 'live-badge';
+    el.style.cssText = 'display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#7DC242;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;border:1px solid #7DC242;cursor:pointer;';
+    el.onclick = () => this.stopDemo();
+    document.body.appendChild(el);
+    return el;
+  },
+
+  stopDemo() {
+    this.stop();
+    this.demoMode = false;
+    const badge = document.getElementById('live-badge');
+    if (badge) badge.remove();
+    console.log('[LiveScores] Demo stopped');
+  },
+
+  addApiKey(key) {
+    this.API_KEY = key;
+    if (this.demoMode) this.stopDemo();
+    this.start();
+  },
+};
+
+// Auto-init when app loads
+LIVE.init();
