@@ -45,7 +45,31 @@ const S = {
 // ══════════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════════
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    const icon = btn.querySelector('.theme-toggle-icon');
+    if (icon) icon.textContent = theme === 'light' ? '☀️' : '🌙';
+    btn.setAttribute('aria-label', theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
+  }
+}
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  applyTheme(saved);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', next);
+      applyTheme(next);
+    });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  initTheme();
   loadLocal();
 
   if (S.user) {
