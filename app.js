@@ -423,9 +423,31 @@ function calcGroupStandings(groupId, userId) {
 
   return Object.values(tbl).sort((a, b) => {
     if (b.pts !== a.pts) return b.pts - a.pts;
-    if ((b.gf - b.ga) !== (a.gf - a.ga)) return (b.gf - b.ga) - (a.gf - a.ga);
-    return b.gf - a.gf;
+    const gdA = b.gf - b.ga, gdB = a.gf - a.ga;
+    if (gdA !== gdB) return gdA - gdB;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    // Head-to-head tiebreaker
+    return headToHeadResult(group.id, a.code, b.code, preds);
   });
+}
+
+function headToHeadResult(groupId, teamA, teamB, preds) {
+  // Head-to-head tiebreaker: when pts, GD, GF are equal, the team that won
+  // the head-to-head match ranks higher. Returns -1 if teamA wins h2h, 1 if teamB wins.
+  const matches = WC.matchesByGroup[groupId] || [];
+  for (const m of matches) {
+    if ((m.home === teamA && m.away === teamB) || (m.home === teamB && m.away === teamA)) {
+      const p = preds[m.id];
+      if (p && p.home !== undefined && p.away !== undefined) {
+        const h = +p.home, a = +p.away;
+        if (h > a) return m.home === teamA ? -1 : 1;
+        if (h < a) return m.home === teamB ? -1 : 1;
+        return 0; // draw
+      }
+      return 0;
+    }
+  }
+  return 0;
 }
 
 // ══════════════════════════════════════════════════════
