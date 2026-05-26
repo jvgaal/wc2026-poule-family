@@ -978,27 +978,24 @@ function bktCard(roundId, idx, hasSelects, locked) {
   const teamRow = (side, team, isWinner) => {
     const teamCell = (hasSelects && !locked)
       ? (() => {
-          // For R32, filter teams by group
           let options = teamOptions(slot[side]);
           if (roundId === 'r32') {
             const groups = getQualifierGroupsForR32(idx);
             let teamCodes = [];
-            if (side === 'home') {
-              // Home is always a group winner (1st place)
-              const groupData = WC.groups.find(g => g.id === groups.homeGroup);
-              teamCodes = groupData?.teams || [];
-            } else {
-              // Away depends on whether it's a runner-up or third-place position
-              if (groups.awayIsThirdPlace) {
-                // Third-place position: show teams from the allowed groups
-                const thirdGroupIds = groups.thirdPlaceGroups || [];
-                teamCodes = WC.groups
-                  .filter(g => thirdGroupIds.includes(g.id))
-                  .flatMap(g => g.teams);
-              } else {
-                // Runner-up position: show teams from the single awayGroup
-                const groupData = WC.groups.find(g => g.id === groups.awayGroup);
+            if (groups) {
+              if (side === 'home') {
+                const groupData = WC.groups.find(g => g.id === groups.homeGroup);
                 teamCodes = groupData?.teams || [];
+              } else {
+                if (groups.awayIsThirdPlace) {
+                  const thirdGroupIds = groups.thirdPlaceGroups || [];
+                  teamCodes = WC.groups
+                    .filter(g => thirdGroupIds.includes(g.id))
+                    .flatMap(g => g.teams);
+                } else {
+                  const groupData = WC.groups.find(g => g.id === groups.awayGroup);
+                  teamCodes = groupData?.teams || [];
+                }
               }
             }
             options = teamCodes
@@ -1065,6 +1062,14 @@ function setKoTeam(roundId, idx, side, teamCode) {
 }
 
 function autoFillKo() {
+  // Warn if R32 winners are already picked
+  const existingWinners = S.koPredictions.r32?.filter(m => m.winner).length || 0;
+  if (existingWinners > 0) {
+    if (!confirm(`You already have ${existingWinners} R32 winner${existingWinners > 1 ? 's' : ''} picked. Auto-fill will clear all R32 picks. Continue?`)) {
+      return;
+    }
+  }
+
   const tops = {};
   WC.groups.forEach(g => {
     const s = calcGroupStandings(g.id, S.user.id);

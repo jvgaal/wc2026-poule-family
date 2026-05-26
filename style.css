@@ -455,7 +455,7 @@ body::after {
 
 .lb-sub {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-sub);
 }
 
 .lb-progress {
