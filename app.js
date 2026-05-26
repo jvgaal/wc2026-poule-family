@@ -360,7 +360,15 @@ function calcScore(userId) {
     const rPreds   = ko[round.id]                || [];
     rResults.forEach((res, i) => {
       if (!res?.winner) return;
-      if (rPreds[i]?.winner === res.winner) koPts += round.pts;
+      const pred = rPreds[i] || {};
+      // Exact score (both home and away match) = bonus points on top of winner points
+      if (res.home !== '' && res.away !== '' &&
+          pred.hScore !== '' && pred.aScore !== '' &&
+          +pred.hScore === res.home && +pred.aScore === res.away) {
+        koPts += round.pts + WC.scoring.groupExact; // winner + exact bonus
+      } else if (pred.winner === res.winner) {
+        koPts += round.pts; // winner only
+      }
     });
   });
 
@@ -1550,18 +1558,44 @@ function renderAdminKoResultGrid(roundId) {
   if (!el) return;
   const round = WC.koRounds.find(r => r.id === roundId);
   const resArr = S.results[`ko_${roundId}`] || Array(round.matches).fill(null);
+  const koPreds = S.koPredictions[roundId] || [];
 
   el.innerHTML = Array.from({ length: round.matches }, (_, i) => {
     const res  = resArr[i] || {};
-    const team = teamOptions(res.winner || '');
+    const pred = koPreds[i] || {};
+    const homeTeam = pred.home ? WC.teams[pred.home] : null;
+    const awayTeam = pred.away ? WC.teams[pred.away] : null;
+    const homeScore = res.home ?? '';
+    const awayScore = res.away ?? '';
+    const winner = res.winner || '';
     return `
     <div class="result-entry-card">
       <div class="result-entry-label">${round.name} · Match ${i + 1}</div>
+      <div class="result-entry-row" style="margin-bottom:8px">
+        <span>Match:</span>
+        <span style="flex:1;text-align:center;font-weight:bold">
+          ${homeTeam ? homeTeam.flag + ' ' + homeTeam.name : 'TBD'}
+          &nbsp;vs&nbsp;
+          ${awayTeam ? awayTeam.flag + ' ' + awayTeam.name : 'TBD'}
+        </span>
+      </div>
       <div class="result-entry-row">
-        <span>Winner:</span>
+        <span>Score:</span>
+        <input type="number" min="0" max="20" placeholder="–"
+               style="width:60px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;text-align:center"
+               value="${homeScore}" data-idx="${i}" data-side="home"
+               onchange="saveKoResultScore('${roundId}',${i},'home',this.value)">
+        <span>-</span>
+        <input type="number" min="0" max="20" placeholder="–"
+               style="width:60px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px;text-align:center"
+               value="${awayScore}" data-idx="${i}" data-side="away"
+               onchange="saveKoResultScore('${roundId}',${i},'away',this.value)">
+        <span style="margin-left:12px">Winner:</span>
         <select style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px"
                 onchange="saveKoResult('${roundId}',${i},this.value)">
-          ${team}
+          <option value="">— Auto / Draw —</option>
+          ${homeTeam ? `<option value="${pred.home}" ${winner === pred.home ? 'selected' : ''}>${homeTeam.flag} ${homeTeam.name}</option>` : ''}
+          ${awayTeam ? `<option value="${pred.away}" ${winner === pred.away ? 'selected' : ''}>${awayTeam.flag} ${awayTeam.name}</option>` : ''}
         </select>
       </div>
     </div>`;
@@ -1572,6 +1606,28 @@ function saveKoResult(roundId, idx, winner) {
   if (!S.results[`ko_${roundId}`]) S.results[`ko_${roundId}`] = [];
   if (!S.results[`ko_${roundId}`][idx]) S.results[`ko_${roundId}`][idx] = {};
   S.results[`ko_${roundId}`][idx].winner = winner;
+  saveLocal();
+  syncRemoteResults();
+}
+
+function saveKoResultScore(roundId, idx, side, val) {
+  if (!S.results[`ko_${roundId}`]) S.results[`ko_${roundId}`] = [];
+  if (!S.results[`ko_${roundId}`][idx]) S.results[`ko_${roundId}`][idx] = {};
+  const num = val === '' ? '' : Math.max(0, Math.min(20, parseInt(val, 10) || 0));
+  S.results[`ko_${roundId}`][idx][side] = num;
+  // Auto-determine winner from scores if both are set
+  const res = S.results[`ko_${roundId}`][idx];
+  if (res.home !== '' && res.away !== '') {
+    if (res.home > res.away) {
+      const koPred = S.koPredictions[roundId]?.[idx];
+      res.winner = koPred?.home || '';
+    } else if (res.away > res.home) {
+      const koPred = S.koPredictions[roundId]?.[idx];
+      res.winner = koPred?.away || '';
+    } else {
+      res.winner = ''; // draw, no winner yet
+    }
+  }
   saveLocal();
   syncRemoteResults();
 }
