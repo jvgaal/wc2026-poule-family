@@ -934,10 +934,11 @@ body::after {
 /* ── BRACKET LAYOUT ── */
 .bkt-scroll {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   width: 100%;
   padding-bottom: 20px;
-  /* JS sets height to scaled tree height so nothing gets cut off */
+  max-height: calc(100vh - 180px);
+  min-height: 400px;
 }
 
 /* Dark scrollbar styling */
@@ -967,7 +968,7 @@ body::after {
   align-items: flex-start;
   gap: 10px;
   min-width: 2700px;
-  height: 1400px;   /* 8 slots × 1400/8 = 175px each */
+  height: 1500px;   /* Extra height ensures 3rd place and Final are visible */
 }
 
 /* Each round column */

@@ -922,10 +922,14 @@ function getQualifierLabel(roundId, matchIdx) {
     return `Group ${q.home.group} #${q.home.pos} vs Group ${q.away.group} #${q.away.pos}`;
   }
 
-  // For R16+, show match numbers
+  // For R16+, show proper round names
   const r = WC.koRounds.find(x => x.id === roundId);
   if (r && r.startMatch != null) {
-    return `M${r.startMatch + matchIdx}`;
+    const roundNames = {
+      r32: 'R32', r16: 'R16', qf: 'QF', sf: 'SF', third: '3rd', final: 'Final'
+    };
+    const shortName = roundNames[roundId] || r.short;
+    return `${shortName} ${matchIdx + 1}`;
   }
   return r?.short || '';
 }
