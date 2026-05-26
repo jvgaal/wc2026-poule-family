@@ -859,28 +859,36 @@ function bktColHdr(roundId) {
 }
 
 function getQualifierLabel(roundId, matchIdx) {
-  // R32 bracket structure: 16 matches with specific group pairings
+  // R32 bracket structure: 16 matches with official FIFA 2026 pairings
+  // Each entry: { home: {group, pos, type}, away: {group, pos, type} }
+  // type: 1 = winner, 2 = runner-up, 3 = third-place (from specific groups)
   const r32Qualifiers = [
-    { home: { group: 'A', pos: 1 }, away: { group: 'B', pos: 2 } },
-    { home: { group: 'C', pos: 1 }, away: { group: 'D', pos: 2 } },
-    { home: { group: 'E', pos: 1 }, away: { group: 'F', pos: 2 } },
-    { home: { group: 'G', pos: 1 }, away: { group: 'H', pos: 2 } },
-    { home: { group: 'I', pos: 1 }, away: { group: 'J', pos: 2 } },
-    { home: { group: 'K', pos: 1 }, away: { group: 'L', pos: 2 } },
-    { home: { group: 'B', pos: 1 }, away: { group: 'A', pos: 2 } },
-    { home: { group: 'D', pos: 1 }, away: { group: 'C', pos: 2 } },
-    { home: { group: 'F', pos: 1 }, away: { group: 'E', pos: 2 } },
-    { home: { group: 'H', pos: 1 }, away: { group: 'G', pos: 2 } },
-    { home: { group: 'J', pos: 1 }, away: { group: 'I', pos: 2 } },
-    { home: { group: 'L', pos: 1 }, away: { group: 'K', pos: 2 } },
-    { home: { group: 'A', pos: 1 }, away: { group: 'C', pos: 2 } },
-    { home: { group: 'B', pos: 1 }, away: { group: 'D', pos: 2 } },
-    { home: { group: 'E', pos: 1 }, away: { group: 'G', pos: 2 } },
-    { home: { group: 'F', pos: 1 }, away: { group: 'H', pos: 2 } },
+    // Fixed: Winner vs Runner-up (positions 0-11)
+    { home: { group: 'A', pos: 1, type: 'winner' }, away: { group: 'B', pos: 2, type: 'runnerup' } },
+    { home: { group: 'C', pos: 1, type: 'winner' }, away: { group: 'D', pos: 2, type: 'runnerup' } },
+    { home: { group: 'E', pos: 1, type: 'winner' }, away: { group: 'F', pos: 2, type: 'runnerup' } },
+    { home: { group: 'G', pos: 1, type: 'winner' }, away: { group: 'H', pos: 2, type: 'runnerup' } },
+    { home: { group: 'I', pos: 1, type: 'winner' }, away: { group: 'J', pos: 2, type: 'runnerup' } },
+    { home: { group: 'K', pos: 1, type: 'winner' }, away: { group: 'L', pos: 2, type: 'runnerup' } },
+    { home: { group: 'B', pos: 1, type: 'winner' }, away: { group: 'A', pos: 2, type: 'runnerup' } },
+    { home: { group: 'D', pos: 1, type: 'winner' }, away: { group: 'C', pos: 2, type: 'runnerup' } },
+    { home: { group: 'F', pos: 1, type: 'winner' }, away: { group: 'E', pos: 2, type: 'runnerup' } },
+    { home: { group: 'H', pos: 1, type: 'winner' }, away: { group: 'G', pos: 2, type: 'runnerup' } },
+    { home: { group: 'J', pos: 1, type: 'winner' }, away: { group: 'I', pos: 2, type: 'runnerup' } },
+    { home: { group: 'L', pos: 1, type: 'winner' }, away: { group: 'K', pos: 2, type: 'runnerup' } },
+    // Third-place teams in R32 (positions 12-15)
+    // 3rd place teams from specific group combinations fill these runner-up slots
+    { home: { group: 'A', pos: 1, type: 'winner' }, away: { groups: ['B','C','D','F'], pos: 3, type: 'third' } },
+    { home: { group: 'B', pos: 1, type: 'winner' }, away: { groups: ['D','E','F','G','I'], pos: 3, type: 'third' } },
+    { home: { group: 'C', pos: 1, type: 'winner' }, away: { groups: ['E','F','H','I','J'], pos: 3, type: 'third' } },
+    { home: { group: 'D', pos: 1, type: 'winner' }, away: { groups: ['F','G','H','I','J','K'], pos: 3, type: 'third' } },
   ];
 
   if (roundId === 'r32' && r32Qualifiers[matchIdx]) {
     const q = r32Qualifiers[matchIdx];
+    if (q.away.type === 'third') {
+      return `Group ${q.home.group} #1 vs 3rd place (from ${q.away.groups.join('/')})`;
+    }
     return `Group ${q.home.group} #${q.home.pos} vs Group ${q.away.group} #${q.away.pos}`;
   }
 
@@ -893,23 +901,27 @@ function getQualifierLabel(roundId, matchIdx) {
 }
 
 function getQualifierGroupsForR32(matchIdx) {
+  // Returns { homeGroup, awayGroup, awayIsThirdPlace, thirdPlaceGroups }
+  // for dropdown filtering in R32 matches
   const r32Qualifiers = [
-    { homeGroup: 'A', awayGroup: 'B' },
-    { homeGroup: 'C', awayGroup: 'D' },
-    { homeGroup: 'E', awayGroup: 'F' },
-    { homeGroup: 'G', awayGroup: 'H' },
-    { homeGroup: 'I', awayGroup: 'J' },
-    { homeGroup: 'K', awayGroup: 'L' },
-    { homeGroup: 'B', awayGroup: 'A' },
-    { homeGroup: 'D', awayGroup: 'C' },
-    { homeGroup: 'F', awayGroup: 'E' },
-    { homeGroup: 'H', awayGroup: 'G' },
-    { homeGroup: 'J', awayGroup: 'I' },
-    { homeGroup: 'L', awayGroup: 'K' },
-    { homeGroup: 'A', awayGroup: 'C' },
-    { homeGroup: 'B', awayGroup: 'D' },
-    { homeGroup: 'E', awayGroup: 'G' },
-    { homeGroup: 'F', awayGroup: 'H' },
+    // Fixed: Winner vs Runner-up (positions 0-11)
+    { homeGroup: 'A', awayGroup: 'B', awayIsThirdPlace: false },
+    { homeGroup: 'C', awayGroup: 'D', awayIsThirdPlace: false },
+    { homeGroup: 'E', awayGroup: 'F', awayIsThirdPlace: false },
+    { homeGroup: 'G', awayGroup: 'H', awayIsThirdPlace: false },
+    { homeGroup: 'I', awayGroup: 'J', awayIsThirdPlace: false },
+    { homeGroup: 'K', awayGroup: 'L', awayIsThirdPlace: false },
+    { homeGroup: 'B', awayGroup: 'A', awayIsThirdPlace: false },
+    { homeGroup: 'D', awayGroup: 'C', awayIsThirdPlace: false },
+    { homeGroup: 'F', awayGroup: 'E', awayIsThirdPlace: false },
+    { homeGroup: 'H', awayGroup: 'G', awayIsThirdPlace: false },
+    { homeGroup: 'J', awayGroup: 'I', awayIsThirdPlace: false },
+    { homeGroup: 'L', awayGroup: 'K', awayIsThirdPlace: false },
+    // Third-place teams (positions 12-15)
+    { homeGroup: 'A', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['B','C','D','F'] },
+    { homeGroup: 'B', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['D','E','F','G','I'] },
+    { homeGroup: 'C', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['E','F','H','I','J'] },
+    { homeGroup: 'D', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['F','G','H','I','J','K'] },
   ];
   return r32Qualifiers[matchIdx] || null;
 }
@@ -938,9 +950,26 @@ function bktCard(roundId, idx, hasSelects, locked) {
           let options = teamOptions(slot[side]);
           if (roundId === 'r32') {
             const groups = getQualifierGroupsForR32(idx);
-            const relevantGroup = side === 'home' ? groups.homeGroup : groups.awayGroup;
-            const groupTeamCodes = WC.groups.find(g => g.id === relevantGroup)?.teams || [];
-            options = groupTeamCodes
+            let teamCodes = [];
+            if (side === 'home') {
+              // Home is always a group winner (1st place)
+              const groupData = WC.groups.find(g => g.id === groups.homeGroup);
+              teamCodes = groupData?.teams || [];
+            } else {
+              // Away depends on whether it's a runner-up or third-place position
+              if (groups.awayIsThirdPlace) {
+                // Third-place position: show teams from the allowed groups
+                const thirdGroupIds = groups.thirdPlaceGroups || [];
+                teamCodes = WC.groups
+                  .filter(g => thirdGroupIds.includes(g.id))
+                  .flatMap(g => g.teams);
+              } else {
+                // Runner-up position: show teams from the single awayGroup
+                const groupData = WC.groups.find(g => g.id === groups.awayGroup);
+                teamCodes = groupData?.teams || [];
+              }
+            }
+            options = teamCodes
               .map(code => {
                 const team = WC.teams[code];
                 const selected = slot[side] === code ? ' selected' : '';
@@ -1009,16 +1038,71 @@ function autoFillKo() {
     const s = calcGroupStandings(g.id, S.user.id);
     tops[g.id] = { first: s[0]?.code || '', second: s[1]?.code || '' };
   });
+
+  // Calculate third-place teams and their rankings
+  const thirdPlaceData = WC.groups.map(g => {
+    const s = calcGroupStandings(g.id, S.user.id);
+    return {
+      group: g.id,
+      code: s[2]?.code || '',
+      pts: s[2]?.pts || 0,
+      gd: (s[2]?.gf || 0) - (s[2]?.ga || 0),
+      gf: s[2]?.gf || 0
+    };
+  }).filter(t => t.code);
+
+  // Sort by pts, then GD, then GF
+  thirdPlaceData.sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if (b.gd !== a.gd) return b.gd - a.gd;
+    return b.gf - a.gf;
+  });
+
+  const qualifiedThirdPlaces = thirdPlaceData.slice(0, 8);
+
+  // Third-place team slot constraints for positions 12-15
+  // position 12: A1 vs 3rd from B/C/D/F
+  // position 13: B1 vs 3rd from D/E/F/G/I
+  // position 14: C1 vs 3rd from E/F/H/I/J
+  // position 15: D1 vs 3rd from F/G/H/I/J/K
+  const thirdPlaceSlots = [
+    { pos: 12, groups: ['B', 'C', 'D', 'F'] },
+    { pos: 13, groups: ['D', 'E', 'F', 'G', 'I'] },
+    { pos: 14, groups: ['E', 'F', 'H', 'I', 'J'] },
+    { pos: 15, groups: ['F', 'G', 'H', 'I', 'J', 'K'] },
+  ];
+
+  // Assign third-place teams to slots based on group and ranking
+  const thirdPlaceAssignments = {};
+  const usedThirdPlaces = new Set();
+
+  thirdPlaceSlots.forEach(slot => {
+    // Find the highest-ranked qualified third-place team from allowed groups
+    for (const tp of qualifiedThirdPlaces) {
+      if (slot.groups.includes(tp.group) && !usedThirdPlaces.has(tp.code)) {
+        thirdPlaceAssignments[slot.pos] = tp.code;
+        usedThirdPlaces.add(tp.code);
+        break;
+      }
+    }
+  });
+
+  // R32 bracket positions based on official FIFA 2026 structure
   const r32Pairs = [
+    // Positions 0-11: Winner vs Runner-up
     [tops.A?.first, tops.B?.second], [tops.C?.first, tops.D?.second],
     [tops.E?.first, tops.F?.second], [tops.G?.first, tops.H?.second],
     [tops.I?.first, tops.J?.second], [tops.K?.first, tops.L?.second],
     [tops.B?.first, tops.A?.second], [tops.D?.first, tops.C?.second],
     [tops.F?.first, tops.E?.second], [tops.H?.first, tops.G?.second],
     [tops.J?.first, tops.I?.second], [tops.L?.first, tops.K?.second],
-    [tops.A?.first, tops.C?.second], [tops.B?.first, tops.D?.second],
-    [tops.E?.first, tops.G?.second], [tops.F?.first, tops.H?.second],
+    // Positions 12-15: Winner vs Third-place
+    [tops.A?.first, thirdPlaceAssignments[12] || ''],
+    [tops.B?.first, thirdPlaceAssignments[13] || ''],
+    [tops.C?.first, thirdPlaceAssignments[14] || ''],
+    [tops.D?.first, thirdPlaceAssignments[15] || ''],
   ];
+
   S.koPredictions.r32 = r32Pairs.map(([h, a]) => ({home: h||'', away: a||'', winner: ''}));
   cascadeWinners();
   debouncedSave();
