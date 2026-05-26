@@ -383,8 +383,6 @@ function calcScore(userId) {
       if (diff <= 3)  bonusPts += WC.scoring.bonus.total_goals_3;
       else if (diff <= 8)  bonusPts += WC.scoring.bonus.total_goals_8;
       else if (diff <= 15) bonusPts += WC.scoring.bonus.total_goals_15;
-    } else if (q.id === 'red_card_final') {
-      if (p === r) bonusPts += WC.scoring.bonus.red_card_final;
     } else {
       const key = q.id;
       const pts = WC.scoring.bonus[key] || 0;

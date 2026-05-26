@@ -90,10 +90,10 @@ const WC = {
     groupResult: 1,
     ko: { r32: 2, r16: 3, qf: 4, sf: 5, third: 3, final: 8 },
     bonus: {
-      winner: 10, runner_up: 5, golden_boot: 8, golden_ball: 5,
-      golden_glove: 4, best_young: 3,
+      winner: 10, runner_up: 5, golden_boot: 8, golden_ball: 4,
+      best_player: 4,
       total_goals_3: 5, total_goals_8: 3, total_goals_15: 1,
-      first_out: 3, red_card_final: 2, top_scoring_team: 4
+      first_out: 3, top_scoring_team: 4
     }
   },
 
@@ -150,21 +150,13 @@ const WC = {
       ]
     },
     {
-      id: "golden_glove", emoji: "🧤",
-      question: "Who wins the Golden Glove (best goalkeeper)?",
+      id: "best_player", emoji: "🌟",
+      question: "Who wins the Best Player award (Golden Ball)?",
       type: "player", points: 4,
-      tip: "Usually goes to a keeper from a deep-running, defensively solid team. Clean sheets and big saves matter.",
+      tip: "Usually goes to someone from a top team that goes far. Playmakers, dribblers and key scorers win this. Messi won in 2014 despite Argentina losing the final.",
       links: [
-        { label: "Keeper stats – Sofascore", url: "https://www.sofascore.com" },
-      ]
-    },
-    {
-      id: "best_young", emoji: "🌱",
-      question: "Who wins the Best Young Player award?",
-      type: "player", points: 3,
-      tip: "Born on or after 1 Jan 2005 (FIFA: 21 or younger at start of tournament year). Hot pick: Yamal (Spain) — most other big names are too old.",
-      links: [
-        { label: "Young stars to watch – ESPN", url: "https://www.espn.com/soccer/story/_/id/47108758/2026-fifa-world-cup-format-tiebreakers-fixtures-schedule" },
+        { label: "Golden Ball odds – NBC Sports", url: "https://www.nbcsports.com/soccer/news/betting-odds-for-2026-world-cup-who-are-the-favorites-dark-horses-top-scorers" },
+        { label: "Yahoo Sports full preview",     url: "https://sports.yahoo.com/soccer/betting/article/ultimate-2026-world-cup-betting-preview-odds-best-bets-for-every-group-golden-boot-and-winner-195049054.html" },
       ]
     },
     {
@@ -185,13 +177,6 @@ const WC = {
         { label: "Group odds",             url: "https://www.oddschecker.com/football/world-cup" },
         { label: "Group previews – Rotowire", url: "https://www.rotowire.com/soccer/article/2026-world-cup-group-previews-lineups-odds-predictions-and-tactics-for-all-12-groups-111248" },
       ]
-    },
-    {
-      id: "red_card_final", emoji: "🔴",
-      question: "Will there be a red card shown in the Final?",
-      type: "boolean", points: 2,
-      tip: "Rare — only a handful in WC history. Most famous: Zidane's headbutt in 2006. History says no, but stranger things have happened.",
-      links: []
     },
     {
       id: "top_scoring_team", emoji: "⚡",
