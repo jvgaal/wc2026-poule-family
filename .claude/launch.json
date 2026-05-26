@@ -3,10 +3,10 @@
   "configurations": [
     {
       "name": "worldcup",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["http-server", ".", "-p", "8000", "-c-1"],
       "cwd": "/Users/jorg/Desktop/Claude Pro Projects/worldcup-2026-poule-family",
-      "autoPort": true
+      "port": 8000
     }
   ]
 }
