@@ -858,6 +858,62 @@ function bktColHdr(roundId) {
   </div>`;
 }
 
+function getQualifierLabel(roundId, matchIdx) {
+  // R32 bracket structure: 16 matches with specific group pairings
+  const r32Qualifiers = [
+    { home: { group: 'A', pos: 1 }, away: { group: 'B', pos: 2 } },
+    { home: { group: 'C', pos: 1 }, away: { group: 'D', pos: 2 } },
+    { home: { group: 'E', pos: 1 }, away: { group: 'F', pos: 2 } },
+    { home: { group: 'G', pos: 1 }, away: { group: 'H', pos: 2 } },
+    { home: { group: 'I', pos: 1 }, away: { group: 'J', pos: 2 } },
+    { home: { group: 'K', pos: 1 }, away: { group: 'L', pos: 2 } },
+    { home: { group: 'B', pos: 1 }, away: { group: 'A', pos: 2 } },
+    { home: { group: 'D', pos: 1 }, away: { group: 'C', pos: 2 } },
+    { home: { group: 'F', pos: 1 }, away: { group: 'E', pos: 2 } },
+    { home: { group: 'H', pos: 1 }, away: { group: 'G', pos: 2 } },
+    { home: { group: 'J', pos: 1 }, away: { group: 'I', pos: 2 } },
+    { home: { group: 'L', pos: 1 }, away: { group: 'K', pos: 2 } },
+    { home: { group: 'A', pos: 1 }, away: { group: 'C', pos: 2 } },
+    { home: { group: 'B', pos: 1 }, away: { group: 'D', pos: 2 } },
+    { home: { group: 'E', pos: 1 }, away: { group: 'G', pos: 2 } },
+    { home: { group: 'F', pos: 1 }, away: { group: 'H', pos: 2 } },
+  ];
+
+  if (roundId === 'r32' && r32Qualifiers[matchIdx]) {
+    const q = r32Qualifiers[matchIdx];
+    return `Group ${q.home.group} #${q.home.pos} vs Group ${q.away.group} #${q.away.pos}`;
+  }
+
+  // For R16+, show match numbers
+  const r = WC.koRounds.find(x => x.id === roundId);
+  if (r && r.startMatch != null) {
+    return `M${r.startMatch + matchIdx}`;
+  }
+  return r?.short || '';
+}
+
+function getQualifierGroupsForR32(matchIdx) {
+  const r32Qualifiers = [
+    { homeGroup: 'A', awayGroup: 'B' },
+    { homeGroup: 'C', awayGroup: 'D' },
+    { homeGroup: 'E', awayGroup: 'F' },
+    { homeGroup: 'G', awayGroup: 'H' },
+    { homeGroup: 'I', awayGroup: 'J' },
+    { homeGroup: 'K', awayGroup: 'L' },
+    { homeGroup: 'B', awayGroup: 'A' },
+    { homeGroup: 'D', awayGroup: 'C' },
+    { homeGroup: 'F', awayGroup: 'E' },
+    { homeGroup: 'H', awayGroup: 'G' },
+    { homeGroup: 'J', awayGroup: 'I' },
+    { homeGroup: 'L', awayGroup: 'K' },
+    { homeGroup: 'A', awayGroup: 'C' },
+    { homeGroup: 'B', awayGroup: 'D' },
+    { homeGroup: 'E', awayGroup: 'G' },
+    { homeGroup: 'F', awayGroup: 'H' },
+  ];
+  return r32Qualifiers[matchIdx] || null;
+}
+
 function bktCard(roundId, idx, hasSelects, locked) {
   const r    = WC.koRounds.find(x => x.id === roundId);
   const slot = S.koPredictions[roundId]?.[idx] || {home:'',away:'',winner:'',hScore:'',aScore:''};
@@ -865,7 +921,7 @@ function bktCard(roundId, idx, hasSelects, locked) {
   const a    = slot.away ? WC.teams[slot.away] : null;
   const hw   = slot.winner && slot.winner === slot.home;
   const aw   = slot.winner && slot.winner === slot.away;
-  const mNum = r.startMatch != null ? `M${r.startMatch + idx}` : r.short;
+  const mNum = getQualifierLabel(roundId, idx);
   const isDraw = slot.hScore !== '' && slot.aScore !== '' && +slot.hScore === +slot.aScore;
 
   // Score input cell (always present unless locked)
@@ -877,10 +933,26 @@ function bktCard(roundId, idx, hasSelects, locked) {
 
   const teamRow = (side, team, isWinner) => {
     const teamCell = (hasSelects && !locked)
-      ? `<select class="bkt-sel" data-round="${roundId}" data-idx="${idx}" data-side="${side}">
-           <option value="">— Pick team —</option>
-           ${teamOptions(slot[side])}
-         </select>`
+      ? (() => {
+          // For R32, filter teams by group
+          let options = teamOptions(slot[side]);
+          if (roundId === 'r32') {
+            const groups = getQualifierGroupsForR32(idx);
+            const relevantGroup = side === 'home' ? groups.homeGroup : groups.awayGroup;
+            const groupTeamCodes = WC.groups.find(g => g.id === relevantGroup)?.teams || [];
+            options = groupTeamCodes
+              .map(code => {
+                const team = WC.teams[code];
+                const selected = slot[side] === code ? ' selected' : '';
+                return `<option value="${code}"${selected}>${team.flag} ${team.name}</option>`;
+              })
+              .join('');
+          }
+          return `<select class="bkt-sel" data-round="${roundId}" data-idx="${idx}" data-side="${side}">
+                    <option value="">— Pick team —</option>
+                    ${options}
+                  </select>`;
+        })()
       : `<div class="bkt-slot${team ? ' filled' : ''}${isWinner ? ' winner' : ''}">
            ${team
              ? `<span class="bkt-flag">${team.flag}</span><span class="bkt-tname">${team.name}</span>`

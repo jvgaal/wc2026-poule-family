@@ -942,7 +942,7 @@ body::after {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  min-width: 1260px;
+  min-width: 1600px;
   height: 940px;   /* 8 slots × 940/8 = 117.5px each */
 }
 
@@ -952,7 +952,7 @@ body::after {
   flex-direction: column;
   justify-content: space-around;
   height: 100%;
-  flex: 0 0 150px;
+  flex: 0 0 200px;
   padding-top: 44px;
   position: relative;
   box-sizing: border-box;

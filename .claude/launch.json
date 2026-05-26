@@ -2,10 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "wc2026-family",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-p", "4322", "."],
-      "port": 4322
+      "name": "worldcup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server"],
+      "cwd": "/Users/jorg/Desktop/Claude Pro Projects/worldcup-2026-poule-family",
+      "autoPort": true
     }
   ]
 }
