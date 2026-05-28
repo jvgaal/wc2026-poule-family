@@ -1393,7 +1393,7 @@ async function unlockAdmin() {
   document.getElementById('admin-tab').style.display = '';
   btn.disabled    = false;
   btn.textContent = 'Unlock';
-  document.getElementById('admin-gate-wrap').classList.remove('active');
+  document.getElementById('admin-gate-wrap').classList.add('hidden');
   document.getElementById('admin-content').classList.add('active');
   document.getElementById('admin-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
   renderAdminContent();
@@ -1404,7 +1404,7 @@ function renderAdmin() {
 }
 
 function renderAdminContent() {
-  document.getElementById('admin-gate-wrap').classList.remove('active');
+  document.getElementById('admin-gate-wrap').classList.add('hidden');
   document.getElementById('admin-content').classList.add('active');
   renderLockGrid();
   renderAdminGroupSelector();
