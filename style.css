@@ -648,7 +648,8 @@ html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
 .howto-card:hover { border-color: var(--border-hi); }
 
 .howto-icon { font-size: 32px; margin-bottom: 10px; }
-.howto-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+.howto-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #14201a; }
+html[data-theme="dark"] .howto-title { color: #e8e8e8; }
 .howto-body { font-size: 13.5px; color: var(--text); line-height: 1.6; }
 html[data-theme="dark"] .howto-body { color: rgba(255,255,255,0.82); }
 html[data-theme="dark"] .howto-body p { color: rgba(255,255,255,0.82); }
