@@ -90,8 +90,7 @@ const WC = {
     groupResult: 1,
     ko: { r32: 2, r16: 3, qf: 4, sf: 5, third: 3, final: 8 },
     bonus: {
-      winner: 10, runner_up: 5, golden_boot: 8, golden_ball: 4,
-      best_player: 4,
+      winner: 10, runner_up: 5, golden_boot: 8, golden_ball: 5,
       total_goals_3: 5, total_goals_8: 3, total_goals_15: 1,
       first_out: 3, top_scoring_team: 4
     }
@@ -142,21 +141,13 @@ const WC = {
     },
     {
       id: "golden_ball", emoji: "🌟",
-      question: "Who wins the Golden Ball (best player)?",
+      question: "Who wins the Golden Ball (best player of the tournament)?",
       type: "player", points: 5,
-      tip: "Can go to someone from a losing team — think playmakers, dribblers. Messi won it in 2014 despite Argentina losing the final to Germany.",
-      links: [
-        { label: "Player form – Sofascore", url: "https://www.sofascore.com" },
-      ]
-    },
-    {
-      id: "best_player", emoji: "🌟",
-      question: "Who wins the Best Player award (Golden Ball)?",
-      type: "player", points: 4,
-      tip: "Usually goes to someone from a top team that goes far. Playmakers, dribblers and key scorers win this. Messi won in 2014 despite Argentina losing the final.",
+      tip: "Usually a playmaker or key scorer from a team that goes deep — but it can go to someone from a losing side. Messi won it in 2014 despite Argentina losing the final.",
       links: [
         { label: "Golden Ball odds – NBC Sports", url: "https://www.nbcsports.com/soccer/news/betting-odds-for-2026-world-cup-who-are-the-favorites-dark-horses-top-scorers" },
         { label: "Yahoo Sports full preview",     url: "https://sports.yahoo.com/soccer/betting/article/ultimate-2026-world-cup-betting-preview-odds-best-bets-for-every-group-golden-boot-and-winner-195049054.html" },
+        { label: "Player form – Sofascore",       url: "https://www.sofascore.com" },
       ]
     },
     {
