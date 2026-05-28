@@ -83,6 +83,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   buildColorPicker();
   bindNav();
+  initMobileNav();
+  updateMobileNavActive();
   bindSubTabs();
   bindModal();
   bindAdmin();
@@ -306,11 +308,72 @@ function bindNav() {
   });
 }
 
+function initMobileNav() {
+  const dropdown = document.getElementById('nav-mobile-dropdown');
+  const trigger = document.getElementById('nav-mobile-trigger');
+  if (!trigger || !dropdown) return;
+
+  // Build dropdown items from the desktop nav tabs
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    const item = document.createElement('button');
+    item.className = 'nav-mobile-item';
+    item.dataset.tab = tab.dataset.tab;
+    item.innerHTML = tab.innerHTML;
+    item.addEventListener('click', () => switchTab(tab.dataset.tab));
+    dropdown.appendChild(item);
+  });
+
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleMobileNav();
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', e => {
+    if (!trigger.contains(e.target) && !dropdown.contains(e.target)) {
+      closeMobileNav();
+    }
+  });
+}
+
+function toggleMobileNav() {
+  const dropdown = document.getElementById('nav-mobile-dropdown');
+  const trigger = document.getElementById('nav-mobile-trigger');
+  dropdown.classList.toggle('open');
+  trigger.classList.toggle('open');
+}
+
+function openMobileNav() {
+  document.getElementById('nav-mobile-dropdown').classList.add('open');
+  document.getElementById('nav-mobile-trigger').classList.add('open');
+}
+
+function closeMobileNav() {
+  document.getElementById('nav-mobile-dropdown').classList.remove('open');
+  document.getElementById('nav-mobile-trigger').classList.remove('open');
+}
+
+function updateMobileNavLabel(tab) {
+  const label = document.getElementById('nav-mobile-label');
+  if (!label) return;
+  const tabEl = document.querySelector(`.nav-tab[data-tab="${tab}"] .nav-tab-label`);
+  if (tabEl) label.textContent = tabEl.textContent;
+}
+
+function updateMobileNavActive() {
+  document.querySelectorAll('.nav-mobile-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.tab === S.activeTab);
+  });
+  updateMobileNavLabel(S.activeTab);
+}
+
 function switchTab(tab) {
   S.activeTab = tab;
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${tab}`));
   renderActiveView();
+  closeMobileNav();
+  updateMobileNavActive();
 }
 
 function bindSubTabs() {
