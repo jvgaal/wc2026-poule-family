@@ -589,7 +589,7 @@ function renderGroupContent(groupId) {
   const roundNames = { 1: 'Round 1', 2: 'Round 2', 3: 'Round 3 (simultaneous)' };
 
   const matchCards = [1, 2, 3].map(r => `
-    <div class="match-label" style="margin-top:${r > 1 ? '20px' : '0'}">${roundNames[r]}</div>
+    <div class="match-label" style="margin-top:${r > 1 ? '20px' : '0'};color:rgba(20,32,26,0.7)">${roundNames[r]}</div>
     ${byRound[r].map(m => matchCard(m, locked)).join('')}
   `).join('');
 
@@ -598,7 +598,7 @@ function renderGroupContent(groupId) {
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div style="font-size:18px;font-weight:700">Group ${groupId}</div>
+      <div style="font-size:18px;font-weight:700;color:#14201a">Group ${groupId}</div>
       <div class="progress-mini">
         <div class="progress-track"><div class="progress-fill" style="width:${Math.round(filled/6*100)}%"></div></div>
         <span>${filled}/6 filled</span>

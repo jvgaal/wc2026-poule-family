@@ -671,8 +671,9 @@ body::after {
   transition: all var(--transition);
 }
 
-.sub-tab:hover { color: var(--text); }
-.sub-tab.active { color: var(--green); border-bottom-color: var(--green); }
+.sub-tab { color: rgba(20, 32, 26, 0.55); }
+.sub-tab:hover { color: #14201a; }
+.sub-tab.active { color: #14201a; border-bottom-color: #14201a; font-weight: 700; }
 
 .sub-view { display: none; }
 .sub-view.active { display: block; }
@@ -700,9 +701,9 @@ body::after {
 .group-btn:hover { border-color: var(--border-hi); color: var(--text); }
 
 .group-btn.active {
-  background: var(--green-glow);
+  background: var(--green);
   border-color: var(--green);
-  color: var(--green);
+  color: #000;
 }
 
 /* ── MATCH CARD ── */
@@ -1355,7 +1356,7 @@ body::after {
 }
 
 .browse-user-card:hover { border-color: var(--green); }
-.browse-user-card.me   { border-color: var(--green); background: var(--green-glow); }
+.browse-user-card.me   { border-color: var(--green); background: var(--bg-card); }
 
 .browse-user-info { flex: 1; min-width: 0; }
 .browse-user-name { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
