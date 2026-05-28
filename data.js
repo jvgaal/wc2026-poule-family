@@ -86,7 +86,7 @@ const WC = {
   ],
 
   scoring: {
-    groupExact:  3,
+    groupExact:  2,
     groupResult: 1,
     ko: { r32: 2, r16: 3, qf: 4, sf: 5, third: 3, final: 8 },
     bonus: {

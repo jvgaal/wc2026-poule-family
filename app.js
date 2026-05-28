@@ -15,7 +15,7 @@ const CONFIG = {
 };
 
 
-const MAX_POSSIBLE = 349; // 216 group + 93 knockout + 40 bonus
+const MAX_POSSIBLE = 341; // 144 group + 157 knockout + 40 bonus
 
 // ══════════════════════════════════════════════════════
 //  STATE
