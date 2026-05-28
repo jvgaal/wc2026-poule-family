@@ -182,6 +182,9 @@ async function fetchRemote() {
     S.results        = data.results      || {};
     S.config         = data.config       || S.config;
 
+    // Update How to Play prizes from server config
+    updateHowtoPrizes();
+
     // Update modal player count
     const count = S.allUsers.length;
     const sub = document.getElementById('modal-player-count');
@@ -1656,7 +1659,7 @@ function updateHowtoPrizes() {
     const el = document.getElementById(`howto-prize-${n}`);
     if (el) {
       const val = S.config.prizes?.[`p${n}`] || '';
-      el.textContent = val || 'Prize TBA (set by admin)';
+      el.textContent = (val && val !== 'TBA') ? val : 'Prize TBA (set by admin)';
     }
   });
 }

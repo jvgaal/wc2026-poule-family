@@ -1854,6 +1854,8 @@ body::after {
   .nav-tab { padding: 6px 8px; }
   .nav-tab-label { display: none; }
   .nav-tab-icon { margin-right: 0; font-size: 18px; }
+  /* Always reveal full Admin tab label on all viewports — overflow scrolls naturally */
+  .nav-tab[data-tab="admin"] .nav-tab-label { display: inline; }
 }
 
 /* ── LOADING SKELETON ── */
