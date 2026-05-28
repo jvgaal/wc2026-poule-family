@@ -15,7 +15,7 @@ const CONFIG = {
 };
 
 
-const MAX_POSSIBLE = 358; // 216 group + 93 knockout + 49 bonus
+const MAX_POSSIBLE = 349; // 216 group + 93 knockout + 40 bonus
 
 // ══════════════════════════════════════════════════════
 //  STATE
@@ -1694,8 +1694,10 @@ function initGoogleSSO() {
 
   if (!hasClientId) {
     // Client ID not configured — fall back to manual name/colour login
-    document.getElementById('sso-block').style.display = 'none';
-    document.getElementById('manual-login-block').style.display = '';
+    const ssoBlock = document.getElementById('sso-block');
+    const manualBlock = document.getElementById('manual-login-block');
+    if (ssoBlock) ssoBlock.style.display = 'none';
+    if (manualBlock) manualBlock.style.display = '';
     buildColorPicker();
     return;
   }
@@ -1792,9 +1794,9 @@ function displayName(user) {
 
 function showNicknameStep(suggestedName) {
   // Hide SSO/manual blocks, show nickname block
-  document.getElementById('sso-block').style.display = 'none';
-  document.getElementById('manual-login-block').style.display = 'none';
-  document.getElementById('nickname-block').style.display = '';
+  if (document.getElementById('sso-block')) document.getElementById('sso-block').style.display = 'none';
+  if (document.getElementById('manual-login-block')) document.getElementById('manual-login-block').style.display = 'none';
+  if (document.getElementById('nickname-block')) document.getElementById('nickname-block').style.display = '';
   const input = document.getElementById('nickname-input');
   if (input) { input.value = suggestedName || ''; input.focus(); input.select(); }
 }
@@ -1809,9 +1811,11 @@ function saveNickname(isChange = false) {
   persistNickname(S.user.id, nick);
   saveLocal();
   closeModal();
-  // Reset modal to SSO block for next open
-  document.getElementById('nickname-block').style.display = 'none';
-  document.getElementById('sso-block').style.display = '';
+  // Reset modal to initial state for next open
+  const nb = document.getElementById('nickname-block');
+  if (nb) nb.style.display = 'none';
+  const sb = document.getElementById('sso-block');
+  if (sb) sb.style.display = '';
   updateHeaderUser();
   document.getElementById('admin-tab').style.display = '';
   syncRemote();
@@ -1974,7 +1978,7 @@ function updateHeaderUser() {
       av.innerHTML = `<img src="${S.user.picture}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
       av.style.background = 'transparent';
     } else {
-      const initials = S.user.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+      const initials = (S.user.nickname || S.user.name).split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
       av.innerHTML = initials;
       av.style.background = S.user.color || '#7DC242';
     }

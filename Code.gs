@@ -63,7 +63,7 @@ function getAll() {
 
   // Build users array
   const userList = users.slice(1).map(r => ({
-    id:    r[0], name: r[1], color: r[2]
+    id:    r[0], name: r[1], color: r[2], nickname: r[3]
   })).filter(u => u.id);
 
   // Build predictions map { userId: { group, bonus, ko } }
