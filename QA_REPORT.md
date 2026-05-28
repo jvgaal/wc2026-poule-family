@@ -1,5 +1,5 @@
 # QA Report — WC 2026 Poule
-**URL:** https://wc2026-poule.pages.dev/#  
+**URL:** https://wc2026-poule-family.pages.dev/#  
 **Date:** 2026-04-29  
 **Tester:** Claude (automated browser QA via preview tools)  
 **Codebase:** `/worldcup-2026-poule`  

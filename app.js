@@ -471,7 +471,7 @@ function renderLeaderboard() {
     const key = `p${n}`;
     const el = document.getElementById(`prize-${n}`);
     if (el) {
-      el.textContent = S.config.prizes?.[key] || '—';
+      el.textContent = S.config.prizes?.[key] || 'TBA';
       el.classList.add('editable');
     }
     const bg  = document.getElementById(`ph-bg-${n}`);
