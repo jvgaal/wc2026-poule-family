@@ -321,14 +321,17 @@ html[data-theme="dark"] .section-title { color: #e8e8e8; }
 }
 html[data-theme="dark"] .section-sub { color: #8a9b8e; }
 
-/* Text on the green body background — keep dark for contrast */
-.bkt-col-name,
-.bkt-center-lbl,
-.bkt-hint,
-.bkt-adv,
-.empty-state h3,
-.empty-state p { color: #14201a; }
-.bkt-hint, .bkt-adv, .empty-state p { color: rgba(20, 32, 26, 0.72); }
+/* Text on the green body background — use in light mode only */
+html[data-theme="light"] .bkt-col-name,
+html[data-theme="light"] .bkt-center-lbl,
+html[data-theme="light"] .bkt-hint,
+html[data-theme="light"] .bkt-adv,
+html[data-theme="light"] .empty-state h3 { color: #14201a; }
+html[data-theme="light"] .empty-state p { color: rgba(20, 32, 26, 0.78); }
+html[data-theme="dark"] .bkt-hint,
+html[data-theme="dark"] .bkt-adv { color: #8a9b8e; }
+html[data-theme="dark"] .empty-state h3 { color: var(--text); }
+html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
 
 /* ── CARDS ── */
 .card {
@@ -660,9 +663,10 @@ html[data-theme="dark"] #howto-prize-list span { color: var(--text-sub); }
 .howto-body strong { color: var(--text); }
 
 /* Standings table labels */
-html[data-theme="light"] .standings-title { color: #1e3828; }
+html[data-theme="light"] .standings-title { color: #14201a; }
 html[data-theme="light"] .std-pts { color: #14201a; }
 html[data-theme="light"] .stat-pill .lbl { color: #546852; }
+html[data-theme="light"] .standings-table td { color: #14201a; }
 .howto-body p { margin-bottom: 8px; }
 .howto-body ul { padding-left: 18px; margin-bottom: 8px; }
 .howto-body li { margin-bottom: 4px; }
