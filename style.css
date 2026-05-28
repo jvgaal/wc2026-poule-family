@@ -103,7 +103,7 @@ body::before {
   background-repeat: repeat;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.45;
+  opacity: 0.28;
 }
 
 /* Football net grid — full-page subtle overlay */
@@ -1356,7 +1356,11 @@ body::after {
   overflow-x: auto;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+  background: var(--bg-card);
 }
+
+.compare-table td { background: var(--bg-card); }
+.compare-table tr:nth-child(even) td { background: var(--bg-card2); }
 
 .compare-table {
   width: 100%;
@@ -1382,7 +1386,6 @@ body::after {
 }
 
 .compare-table tr:last-child td { border-bottom: none; }
-.compare-table tr:nth-child(even) td { background: rgba(255,255,255,0.01); }
 
 .pred-score {
   font-weight: 700;
