@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (S.user) {
     closeModal();
     updateHeaderUser();
-    if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
+    if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
   } else {
     openModal();
   }
@@ -1772,7 +1772,7 @@ window.handleGoogleSignIn = function(response) {
     if (S.user.nickname) {
       closeModal();
       updateHeaderUser();
-      if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
+      if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
       syncRemote();
       renderActiveView();
       showToast(`Welcome back, ${S.user.nickname}! ⚽`, 'success');
@@ -1830,7 +1830,7 @@ function saveNickname(isChange = false) {
   const sb = document.getElementById('sso-block');
   if (sb) sb.style.display = '';
   updateHeaderUser();
-  if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
+  if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
   syncRemote();
   renderActiveView();
   showToast(isChange ? `Nickname updated to "${nick}" ✓` : `Let's go, ${nick}! ⚽`, 'success');
@@ -1970,7 +1970,7 @@ function registerUser() {
   saveLocal();
   closeModal();
   updateHeaderUser();
-  if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
+  if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
   syncRemote();
   renderActiveView();
   showToast(`Welcome${existing ? ' back' : ''}, ${S.user.nickname}! 🎉`, 'success');
