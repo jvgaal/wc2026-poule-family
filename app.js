@@ -321,7 +321,7 @@ function renderActiveView() {
     case 'bonus':        renderBonus();        break;
     case 'browse':       renderBrowse();       break;
     case 'admin':        renderAdmin();        break;
-    case 'howto':        break;  // static content, no JS needed
+    case 'howto':        updateHowtoPrizes(); break;
   }
 }
 
