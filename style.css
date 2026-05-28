@@ -312,14 +312,12 @@ html[data-theme="dark"] .nav-tab.active { color: var(--green); background: var(-
   gap: 10px;
   color: #14201a;
 }
-html[data-theme="dark"] .section-title { color: #e8e8e8; }
 
 .section-sub {
   font-size: 13px;
   color: rgba(20, 32, 26, 0.78);
   margin-top: 3px;
 }
-html[data-theme="dark"] .section-sub { color: #8a9b8e; }
 
 /* Text on the green body background — use in light mode only */
 html[data-theme="light"] .bkt-col-name,
