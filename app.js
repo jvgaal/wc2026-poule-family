@@ -36,6 +36,7 @@ const S = {
   adminGroup:       'A',
   adminKoRound:     'r32',
   adminUnlocked:    false,
+  isAdmin:         false,
   adminPw:          '',   // typed by admin, memory-only (never persisted)
   saveTimer:        null,
   backendOk:        false,
@@ -75,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (S.user) {
     closeModal();
     updateHeaderUser();
-    document.getElementById('admin-tab').style.display = '';
+    if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
   } else {
     openModal();
   }
@@ -106,6 +107,12 @@ function loadLocal() {
     S.koPredictions    = JSON.parse(localStorage.getItem('wc26_ko'))      || {};
     S.results          = JSON.parse(localStorage.getItem('wc26_results')) || {};
     S.config           = JSON.parse(localStorage.getItem('wc26_config'))  || { locked: {}, prizes: { p1:'TBA', p2:'TBA', p3:'TBA' } };
+    S.isAdmin          = localStorage.getItem('wc26_is_admin') === '1';
+    // Restore admin tab if isAdmin
+    if (S.isAdmin) {
+      const tab = document.getElementById('admin-tab');
+      if (tab) tab.style.display = '';
+    }
     // Migrate nickname into the persistent store if not already there
     if (S.user?.id && S.user?.nickname) persistNickname(S.user.id, S.user.nickname);
   } catch(e) { /* corrupted data — start fresh */ }
@@ -1381,6 +1388,8 @@ async function unlockAdmin() {
 
   S.adminPw       = pw;
   S.adminUnlocked = true;
+  S.isAdmin       = true;
+  localStorage.setItem('wc26_is_admin', '1');
   btn.disabled    = false;
   btn.textContent = 'Unlock';
   document.getElementById('admin-gate-wrap').style.display = 'none';
@@ -1762,7 +1771,7 @@ window.handleGoogleSignIn = function(response) {
     if (S.user.nickname) {
       closeModal();
       updateHeaderUser();
-      document.getElementById('admin-tab').style.display = '';
+      if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
       syncRemote();
       renderActiveView();
       showToast(`Welcome back, ${S.user.nickname}! ⚽`, 'success');
@@ -1820,7 +1829,7 @@ function saveNickname(isChange = false) {
   const sb = document.getElementById('sso-block');
   if (sb) sb.style.display = '';
   updateHeaderUser();
-  document.getElementById('admin-tab').style.display = '';
+  if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
   syncRemote();
   renderActiveView();
   showToast(isChange ? `Nickname updated to "${nick}" ✓` : `Let's go, ${nick}! ⚽`, 'success');
@@ -1960,7 +1969,7 @@ function registerUser() {
   saveLocal();
   closeModal();
   updateHeaderUser();
-  document.getElementById('admin-tab').style.display = '';
+  if (S.isAdmin) document.getElementById('admin-tab').style.display = '';
   syncRemote();
   renderActiveView();
   showToast(`Welcome${existing ? ' back' : ''}, ${S.user.nickname}! 🎉`, 'success');
