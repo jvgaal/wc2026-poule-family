@@ -36,8 +36,8 @@ html[data-theme="light"] {
   --border:     #d6e0cf;
   --border-hi:  #b6c9aa;
   --text:       #14201a;
-  --text-sub:   #56685c;
-  --text-dim:   #8a9b8e;
+  --text-sub:   #1e3828;
+  --text-dim:   #546852;
   --green-glow: rgba(125, 194, 66, 0.18);
   --shadow:     0 4px 24px rgba(20,40,20,0.08);
 }
@@ -312,14 +312,14 @@ html[data-theme="dark"] .nav-tab.active { color: var(--green); background: var(-
   gap: 10px;
   color: #14201a;
 }
-
-.section-title .icon { font-size: 20px; }
+html[data-theme="dark"] .section-title { color: #e8e8e8; }
 
 .section-sub {
   font-size: 13px;
   color: rgba(20, 32, 26, 0.78);
   margin-top: 3px;
 }
+html[data-theme="dark"] .section-sub { color: #8a9b8e; }
 
 /* Text on the green body background — keep dark for contrast */
 .bkt-col-name,
@@ -646,7 +646,23 @@ html[data-theme="dark"] .nav-tab.active { color: var(--green); background: var(-
 
 .howto-icon { font-size: 32px; margin-bottom: 10px; }
 .howto-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
-.howto-body { font-size: 13.5px; color: var(--text-sub); line-height: 1.6; }
+.howto-body { font-size: 13.5px; color: var(--text); line-height: 1.6; }
+html[data-theme="dark"] .howto-body { color: rgba(255,255,255,0.82); }
+html[data-theme="dark"] .howto-body p { color: rgba(255,255,255,0.82); }
+html[data-theme="dark"] .howto-body li { color: rgba(255,255,255,0.82); }
+html[data-theme="dark"] .howto-body strong { color: #ffffff; }
+
+/* Prize spans in How-to tab - always readable */
+#howto-prize-list span { color: var(--text); }
+html[data-theme="dark"] #howto-prize-list span { color: var(--text-sub); }
+
+/* Howto body strong text always visible */
+.howto-body strong { color: var(--text); }
+
+/* Standings table labels */
+html[data-theme="light"] .standings-title { color: #1e3828; }
+html[data-theme="light"] .std-pts { color: #14201a; }
+html[data-theme="light"] .stat-pill .lbl { color: #546852; }
 .howto-body p { margin-bottom: 8px; }
 .howto-body ul { padding-left: 18px; margin-bottom: 8px; }
 .howto-body li { margin-bottom: 4px; }

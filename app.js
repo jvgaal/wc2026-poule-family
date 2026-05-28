@@ -1388,8 +1388,9 @@ async function unlockAdmin() {
 
   S.adminPw       = pw;
   S.adminUnlocked = true;
-  S.isAdmin       = true;
   localStorage.setItem('wc26_is_admin', '1');
+  S.isAdmin = true;
+  document.getElementById('admin-tab').style.display = '';
   btn.disabled    = false;
   btn.textContent = 'Unlock';
   document.getElementById('admin-gate-wrap').style.display = 'none';
