@@ -13,9 +13,9 @@
   --bg-input:   #07100a;
   --border:     #1c3020;
   --border-hi:  #2a4830;
-  --text:       #f0f0f0;
-  --text-sub:   #888;
-  --text-dim:   #555;
+  --text:       #ffffff;
+  --text-sub:   #e8e8e8;
+  --text-dim:   #c8c8c8;
   --gold:       #f0b429;
   --silver:     #9eb3c2;
   --bronze:     #cd7f32;
@@ -83,21 +83,8 @@ html { scroll-behavior: smooth; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background:
-    /* Sam Green dome overhead — stadium atmosphere */
-    radial-gradient(ellipse 140% 45% at 50% -8%, rgba(125,194,66,0.32) 0%, transparent 55%),
-    /* Floodlight towers — sharp beams left & right */
-    radial-gradient(ellipse 22% 65% at  3%  2%, rgba(125,194,66,0.22) 0%, transparent 75%),
-    radial-gradient(ellipse 22% 65% at 97%  2%, rgba(125,194,66,0.22) 0%, transparent 75%),
-    /* Secondary beam fans */
-    radial-gradient(ellipse 18% 50% at 18%  0%, rgba(125,194,66,0.10) 0%, transparent 65%),
-    radial-gradient(ellipse 18% 50% at 82%  0%, rgba(125,194,66,0.10) 0%, transparent 65%),
-    /* Warm crowd glow — amber from mid-stands */
-    radial-gradient(ellipse 55% 35% at 78% 72%, rgba(220,150,40,0.13) 0%, transparent 55%),
-    radial-gradient(ellipse 45% 30% at 22% 68%, rgba(200,130,30,0.10) 0%, transparent 50%),
-    /* Pitch green rising from bottom */
-    radial-gradient(ellipse 85% 28% at 50% 108%, rgba(125,194,66,0.20) 0%, transparent 62%),
-    /* Deep charcoal-teal base */
-    linear-gradient(180deg, #040a06 0%, #060e08 22%, #07100a 50%, #08130c 75%, #091508 100%);
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255,255,255,0.15) 0%, transparent 60%),
+    linear-gradient(180deg, #b9e88a 0%, #9ed96a 50%, #7DC242 100%);
   color: var(--text);
   min-height: 100vh;
   font-size: 15px;
@@ -106,18 +93,17 @@ body {
   position: relative;
 }
 
-/* Stadium silhouette + pitch */
+/* Cartoon sticker scene — playful football icons scattered over green */
 body::before {
   content: '';
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 52vh;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 480' preserveAspectRatio='xMidYMax slice'%3E%3C!-- LEFT STAND --%3E%3Cpath d='M0,480 L0,80 L18,78 L18,120 L50,115 L50,155 L82,148 L82,188 L115,180 L115,220 L148,212 L148,255 L182,246 L182,292 L218,284 L218,340 L256,334 L256,480 Z' fill='%230d1f0d'/%3E%3C!-- Left stand row lines --%3E%3Cline x1='18' y1='120' x2='256' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='50' y1='155' x2='256' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='82' y1='188' x2='256' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='115' y1='220' x2='256' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='148' y1='255' x2='256' y2='334' stroke='%23142814' stroke-width='1'/%3E%3C!-- RIGHT STAND --%3E%3Cpath d='M1440,480 L1440,80 L1422,78 L1422,120 L1390,115 L1390,155 L1358,148 L1358,188 L1325,180 L1325,220 L1292,212 L1292,255 L1258,246 L1258,292 L1222,284 L1222,340 L1184,334 L1184,480 Z' fill='%230d1f0d'/%3E%3C!-- Right stand row lines --%3E%3Cline x1='1422' y1='120' x2='1184' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='1390' y1='155' x2='1184' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='1358' y1='188' x2='1184' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='1325' y1='220' x2='1184' y2='334' stroke='%23142814' stroke-width='1'/%3E%3Cline x1='1292' y1='255' x2='1184' y2='334' stroke='%23142814' stroke-width='1'/%3E%3C!-- FAR END STAND (top arc) --%3E%3Cpath d='M256,200 Q720,150 1184,200 L1184,240 Q720,190 256,240 Z' fill='%230a1a0a'/%3E%3Cpath d='M256,240 Q720,190 1184,240 L1184,275 Q720,225 256,275 Z' fill='%230c1e0c'/%3E%3Cpath d='M256,275 Q720,225 1184,275 L1184,334 L256,334 Z' fill='%230e220e'/%3E%3C!-- LEFT FLOODLIGHT TOWER --%3E%3Crect x='5' y='0' width='10' height='82' fill='%23193019' rx='2'/%3E%3Crect x='0' y='75' width='20' height='7' fill='%231f3d1f' rx='1'/%3E%3Cellipse cx='10' cy='75' rx='22' ry='8' fill='rgba(125,194,66,0.35)'/%3E%3C!-- RIGHT FLOODLIGHT TOWER --%3E%3Crect x='1425' y='0' width='10' height='82' fill='%23193019' rx='2'/%3E%3Crect x='1420' y='75' width='20' height='7' fill='%231f3d1f' rx='1'/%3E%3Cellipse cx='1430' cy='75' rx='22' ry='8' fill='rgba(125,194,66,0.35)'/%3E%3C!-- PITCH base --%3E%3Crect x='256' y='334' width='928' height='146' fill='%230d2a0d'/%3E%3C!-- Pitch stripes (alternating lighter/darker) --%3E%3Crect x='256' y='334' width='93' height='146' fill='rgba(0,0,0,0.12)'/%3E%3Crect x='442' y='334' width='93' height='146' fill='rgba(0,0,0,0.12)'/%3E%3Crect x='628' y='334' width='93' height='146' fill='rgba(0,0,0,0.12)'/%3E%3Crect x='814' y='334' width='93' height='146' fill='rgba(0,0,0,0.12)'/%3E%3Crect x='1000' y='334' width='93' height='146' fill='rgba(0,0,0,0.12)'/%3E%3Crect x='1093' y='334' width='91' height='146' fill='rgba(0,0,0,0.12)'/%3E%3C!-- Pitch markings --%3E%3Crect x='256' y='334' width='928' height='146' fill='none' stroke='rgba(255,255,255,0.18)' stroke-width='2'/%3E%3Cline x1='720' y1='334' x2='720' y2='480' stroke='rgba(255,255,255,0.18)' stroke-width='1.5'/%3E%3Cellipse cx='720' cy='407' rx='70' ry='42' fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1.5'/%3E%3Ccircle cx='720' cy='407' r='4' fill='rgba(255,255,255,0.25)'/%3E%3C!-- Left penalty area --%3E%3Crect x='256' y='366' width='110' height='100' fill='none' stroke='rgba(255,255,255,0.13)' stroke-width='1.5'/%3E%3Crect x='256' y='382' width='55' height='68' fill='none' stroke='rgba(255,255,255,0.10)' stroke-width='1'/%3E%3C!-- Right penalty area --%3E%3Crect x='1074' y='366' width='110' height='100' fill='none' stroke='rgba(255,255,255,0.13)' stroke-width='1.5'/%3E%3Crect x='1129' y='382' width='55' height='68' fill='none' stroke='rgba(255,255,255,0.10)' stroke-width='1'/%3E%3C!-- Goals --%3E%3Crect x='240' y='375' width='16' height='64' fill='none' stroke='rgba(255,255,255,0.30)' stroke-width='2'/%3E%3Crect x='1184' y='375' width='16' height='64' fill='none' stroke='rgba(255,255,255,0.30)' stroke-width='2'/%3E%3C!-- Nets behind goals --%3E%3Cpath d='M240,375 L220,365 L220,445 L240,439' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='1'/%3E%3Cpath d='M1200,375 L1220,365 L1220,445 L1200,439' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='1'/%3E%3C!-- Pitch green glow overlay --%3E%3Crect x='256' y='334' width='928' height='146' fill='url(%23pitchGlow)'/%3E%3Cdefs%3E%3CradialGradient id='pitchGlow' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='rgba(125,194,66,0.08)'/%3E%3Cstop offset='100%25' stop-color='rgba(0,0,0,0)'/%3E%3C/radialGradient%3E%3C/defs%3E%3C/svg%3E");
-  background-size: 100% 100%;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800' opacity='0.55'%3E%3C!-- Football 1 --%3E%3Cg transform='translate(90,120) rotate(-15)'%3E%3Ccircle cx='0' cy='0' r='42' fill='%23ffffff' stroke='%23000' stroke-width='4'/%3E%3Cpolygon points='0,-22 19,-7 12,16 -12,16 -19,-7' fill='%23000'/%3E%3Cline x1='0' y1='-22' x2='0' y2='-42' stroke='%23000' stroke-width='3'/%3E%3Cline x1='19' y1='-7' x2='38' y2='-15' stroke='%23000' stroke-width='3'/%3E%3Cline x1='-19' y1='-7' x2='-38' y2='-15' stroke='%23000' stroke-width='3'/%3E%3Cline x1='12' y1='16' x2='24' y2='34' stroke='%23000' stroke-width='3'/%3E%3Cline x1='-12' y1='16' x2='-24' y2='34' stroke='%23000' stroke-width='3'/%3E%3C/g%3E%3C!-- Trophy --%3E%3Cg transform='translate(640,180) rotate(8)'%3E%3Cpath d='M-26,-30 L26,-30 L22,10 Q22,22 0,24 Q-22,22 -22,10 Z' fill='%23f0b429' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M-26,-22 Q-44,-22 -44,-2 Q-44,12 -26,12' fill='none' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M26,-22 Q44,-22 44,-2 Q44,12 26,12' fill='none' stroke='%23000' stroke-width='4'/%3E%3Crect x='-12' y='24' width='24' height='8' fill='%23f0b429' stroke='%23000' stroke-width='3'/%3E%3Crect x='-20' y='32' width='40' height='8' fill='%23f0b429' stroke='%23000' stroke-width='3'/%3E%3Ccircle cx='0' cy='-10' r='6' fill='%23fff' opacity='0.6'/%3E%3C/g%3E%3C!-- Star --%3E%3Cg transform='translate(380,90) rotate(20)'%3E%3Cpolygon points='0,-26 8,-8 28,-6 12,8 16,28 0,18 -16,28 -12,8 -28,-6 -8,-8' fill='%23ffd84d' stroke='%23000' stroke-width='3'/%3E%3C/g%3E%3C!-- Boot --%3E%3Cg transform='translate(180,420) rotate(-12)'%3E%3Cpath d='M-40,-8 L-40,12 Q-40,22 -28,22 L34,22 Q44,22 44,12 L44,-2 Q44,-10 36,-12 L4,-20 L-12,-20 Q-40,-20 -40,-8 Z' fill='%23000' stroke='%23000' stroke-width='3'/%3E%3Cpath d='M-44,18 L48,18 L48,24 L-44,24 Z' fill='%23fff' stroke='%23000' stroke-width='3'/%3E%3Cline x1='-10' y1='-16' x2='-6' y2='10' stroke='%23fff' stroke-width='2'/%3E%3Cline x1='4' y1='-18' x2='8' y2='10' stroke='%23fff' stroke-width='2'/%3E%3Cline x1='18' y1='-14' x2='22' y2='10' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M52,4 Q62,2 64,-2' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cpath d='M52,12 Q64,12 68,6' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/g%3E%3C!-- Football 2 (smaller) --%3E%3Cg transform='translate(560,540) rotate(25)'%3E%3Ccircle cx='0' cy='0' r='32' fill='%23ffffff' stroke='%23000' stroke-width='3'/%3E%3Cpolygon points='0,-16 14,-5 9,12 -9,12 -14,-5' fill='%23000'/%3E%3Cline x1='0' y1='-16' x2='0' y2='-32' stroke='%23000' stroke-width='2.5'/%3E%3Cline x1='14' y1='-5' x2='28' y2='-11' stroke='%23000' stroke-width='2.5'/%3E%3Cline x1='-14' y1='-5' x2='-28' y2='-11' stroke='%23000' stroke-width='2.5'/%3E%3Cline x1='9' y1='12' x2='18' y2='26' stroke='%23000' stroke-width='2.5'/%3E%3Cline x1='-9' y1='12' x2='-18' y2='26' stroke='%23000' stroke-width='2.5'/%3E%3C/g%3E%3C!-- Corner flag --%3E%3Cg transform='translate(300,640) rotate(-5)'%3E%3Cline x1='0' y1='-40' x2='0' y2='40' stroke='%23000' stroke-width='4'/%3E%3Cpath d='M0,-40 L40,-30 L0,-18 Z' fill='%23ef4444' stroke='%23000' stroke-width='3'/%3E%3C/g%3E%3C!-- Star 2 --%3E%3Cg transform='translate(720,380) rotate(-15)'%3E%3Cpolygon points='0,-20 6,-6 22,-4 10,6 13,22 0,14 -13,22 -10,6 -22,-4 -6,-6' fill='%23ffd84d' stroke='%23000' stroke-width='2.5'/%3E%3C/g%3E%3C!-- Goal/net mini --%3E%3Cg transform='translate(80,680) rotate(0)'%3E%3Crect x='-50' y='-30' width='100' height='40' fill='none' stroke='%23000' stroke-width='4'/%3E%3Cline x1='-50' y1='-20' x2='50' y2='-20' stroke='%23000' stroke-width='1.5'/%3E%3Cline x1='-50' y1='-10' x2='50' y2='-10' stroke='%23000' stroke-width='1.5'/%3E%3Cline x1='-50' y1='0' x2='50' y2='0' stroke='%23000' stroke-width='1.5'/%3E%3Cline x1='-30' y1='-30' x2='-30' y2='10' stroke='%23000' stroke-width='1.5'/%3E%3Cline x1='-10' y1='-30' x2='-10' y2='10' stroke='%23000' stroke-width='1.5'/%3E%3Cline x1='10' y1='-30' x2='10' y2='10' stroke='%23000' stroke-width='1.5'/%3E%3Cline x1='30' y1='-30' x2='30' y2='10' stroke='%23000' stroke-width='1.5'/%3E%3C/g%3E%3C!-- Small star --%3E%3Cg transform='translate(460,300) rotate(40)'%3E%3Cpolygon points='0,-14 4,-4 14,-2 6,4 8,14 0,10 -8,14 -6,4 -14,-2 -4,-4' fill='%23fff' stroke='%23000' stroke-width='2'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 800px 800px;
+  background-repeat: repeat;
   pointer-events: none;
   z-index: 0;
+  opacity: 0.45;
 }
 
 /* Football net grid — full-page subtle overlay */
@@ -126,8 +112,8 @@ body::after {
   position: fixed;
   inset: 0;
   background-image:
-    repeating-linear-gradient(0deg,   transparent, transparent 34px, rgba(125,194,66,0.035) 34px, rgba(125,194,66,0.035) 35px),
-    repeating-linear-gradient(90deg,  transparent, transparent 34px, rgba(125,194,66,0.035) 34px, rgba(125,194,66,0.035) 35px);
+    repeating-linear-gradient(0deg,   transparent, transparent 34px, rgba(255,255,255,0.04) 34px, rgba(255,255,255,0.04) 35px),
+    repeating-linear-gradient(90deg,  transparent, transparent 34px, rgba(255,255,255,0.04) 34px, rgba(255,255,255,0.04) 35px);
   pointer-events: none;
   z-index: 0;
 }
@@ -143,7 +129,7 @@ body::after {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(5, 13, 5, 0.93);
+  background: rgba(10, 30, 12, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
