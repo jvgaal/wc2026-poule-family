@@ -389,7 +389,7 @@ body::after {
   color: var(--text-dim);
   pointer-events: none;
 }
-.lb-row.me { border-color: var(--green); background: var(--green-glow); }
+.lb-row.me { border-color: var(--green); background: var(--bg-card); }
 
 .lb-rank {
   font-size: 18px;
