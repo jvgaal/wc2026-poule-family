@@ -1465,7 +1465,7 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-sub);
+  color: var(--text);
   margin-bottom: 14px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
@@ -1835,7 +1835,7 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
   text-align: center;
 }
 
-.admin-gate h2 { font-size: 20px; margin-bottom: 8px; }
+.admin-gate h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
 .admin-gate p  { color: var(--text-sub); margin-bottom: 24px; }
 
 /* ── STAT PILLS ── */
