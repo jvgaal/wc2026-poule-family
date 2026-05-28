@@ -308,15 +308,25 @@ body::after {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: #14201a;
 }
 
 .section-title .icon { font-size: 20px; }
 
 .section-sub {
   font-size: 13px;
-  color: var(--text-sub);
+  color: rgba(20, 32, 26, 0.78);
   margin-top: 3px;
 }
+
+/* Text on the green body background — keep dark for contrast */
+.bkt-col-name,
+.bkt-center-lbl,
+.bkt-hint,
+.bkt-adv,
+.empty-state h3,
+.empty-state p { color: #14201a; }
+.bkt-hint, .bkt-adv, .empty-state p { color: rgba(20, 32, 26, 0.72); }
 
 /* ── CARDS ── */
 .card {

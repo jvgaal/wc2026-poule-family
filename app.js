@@ -886,38 +886,47 @@ function bktColHdr(roundId) {
   </div>`;
 }
 
-function getQualifierLabel(roundId, matchIdx) {
-  // R32 bracket structure: 16 matches with official FIFA 2026 pairings
-  // Each entry: { home: {group, pos, type}, away: {group, pos, type} }
-  // type: 1 = winner, 2 = runner-up, 3 = third-place (from specific groups)
-  const r32Qualifiers = [
-    // Fixed: Winner vs Runner-up (positions 0-11)
-    { home: { group: 'A', pos: 1, type: 'winner' }, away: { group: 'B', pos: 2, type: 'runnerup' } },
-    { home: { group: 'C', pos: 1, type: 'winner' }, away: { group: 'D', pos: 2, type: 'runnerup' } },
-    { home: { group: 'E', pos: 1, type: 'winner' }, away: { group: 'F', pos: 2, type: 'runnerup' } },
-    { home: { group: 'G', pos: 1, type: 'winner' }, away: { group: 'H', pos: 2, type: 'runnerup' } },
-    { home: { group: 'I', pos: 1, type: 'winner' }, away: { group: 'J', pos: 2, type: 'runnerup' } },
-    { home: { group: 'K', pos: 1, type: 'winner' }, away: { group: 'L', pos: 2, type: 'runnerup' } },
-    { home: { group: 'B', pos: 1, type: 'winner' }, away: { group: 'A', pos: 2, type: 'runnerup' } },
-    { home: { group: 'D', pos: 1, type: 'winner' }, away: { group: 'C', pos: 2, type: 'runnerup' } },
-    { home: { group: 'F', pos: 1, type: 'winner' }, away: { group: 'E', pos: 2, type: 'runnerup' } },
-    { home: { group: 'H', pos: 1, type: 'winner' }, away: { group: 'G', pos: 2, type: 'runnerup' } },
-    { home: { group: 'J', pos: 1, type: 'winner' }, away: { group: 'I', pos: 2, type: 'runnerup' } },
-    { home: { group: 'L', pos: 1, type: 'winner' }, away: { group: 'K', pos: 2, type: 'runnerup' } },
-    // Third-place teams in R32 (positions 12-15)
-    // 3rd place teams from specific group combinations fill these runner-up slots
-    { home: { group: 'A', pos: 1, type: 'winner' }, away: { groups: ['B','C','D','F'], pos: 3, type: 'third' } },
-    { home: { group: 'B', pos: 1, type: 'winner' }, away: { groups: ['D','E','F','G','I'], pos: 3, type: 'third' } },
-    { home: { group: 'C', pos: 1, type: 'winner' }, away: { groups: ['E','F','H','I','J'], pos: 3, type: 'third' } },
-    { home: { group: 'D', pos: 1, type: 'winner' }, away: { groups: ['F','G','H','I','J','K'], pos: 3, type: 'third' } },
-  ];
+// Official FIFA 2026 Round of 32 pairings, ordered so that consecutive pairs
+// feed the correct R16 match (r32[2k] & r32[2k+1] -> r16[k]).
+// Source: FIFA 2026 published match schedule (matches 73-88).
+const R32_PAIRINGS = [
+  // r16[0] = M89 (winners of M74 + M77)
+  { home: { group: 'E', pos: 1 }, away: { pos: 3, groups: ['A','B','C','D','F'] } }, // M74
+  { home: { group: 'I', pos: 1 }, away: { pos: 3, groups: ['C','D','F','G','H'] } }, // M77
+  // r16[1] = M90 (winners of M73 + M75)
+  { home: { group: 'A', pos: 2 }, away: { group: 'B', pos: 2 } }, // M73
+  { home: { group: 'F', pos: 1 }, away: { group: 'C', pos: 2 } }, // M75
+  // r16[2] = M93 (winners of M83 + M84)
+  { home: { group: 'K', pos: 2 }, away: { group: 'L', pos: 2 } }, // M83
+  { home: { group: 'H', pos: 1 }, away: { group: 'J', pos: 2 } }, // M84
+  // r16[3] = M94 (winners of M81 + M82)
+  { home: { group: 'D', pos: 1 }, away: { pos: 3, groups: ['B','E','F','I','J'] } }, // M81
+  { home: { group: 'G', pos: 1 }, away: { pos: 3, groups: ['A','E','H','I','J'] } }, // M82
+  // r16[4] = M91 (winners of M76 + M78)
+  { home: { group: 'C', pos: 1 }, away: { group: 'F', pos: 2 } }, // M76
+  { home: { group: 'E', pos: 2 }, away: { group: 'I', pos: 2 } }, // M78
+  // r16[5] = M92 (winners of M79 + M80)
+  { home: { group: 'A', pos: 1 }, away: { pos: 3, groups: ['C','E','F','H','I'] } }, // M79
+  { home: { group: 'L', pos: 1 }, away: { pos: 3, groups: ['E','H','I','J','K'] } }, // M80
+  // r16[6] = M95 (winners of M86 + M88)
+  { home: { group: 'J', pos: 1 }, away: { group: 'H', pos: 2 } }, // M86
+  { home: { group: 'D', pos: 2 }, away: { group: 'G', pos: 2 } }, // M88
+  // r16[7] = M96 (winners of M85 + M87)
+  { home: { group: 'B', pos: 1 }, away: { pos: 3, groups: ['E','F','G','I','J'] } }, // M85
+  { home: { group: 'K', pos: 1 }, away: { pos: 3, groups: ['D','E','I','J','L'] } }, // M87
+];
 
-  if (roundId === 'r32' && r32Qualifiers[matchIdx]) {
-    const q = r32Qualifiers[matchIdx];
-    if (q.away.type === 'third') {
-      return `Group ${q.home.group} #1 vs 3rd place (from ${q.away.groups.join('/')})`;
-    }
-    return `Group ${q.home.group} #${q.home.pos} vs Group ${q.away.group} #${q.away.pos}`;
+const R32_MATCH_NUMBERS = [74,77,73,75,83,84,81,82,76,78,79,80,86,88,85,87];
+
+function r32SideLabel(side) {
+  if (side.groups) return `3rd place (from ${side.groups.join('/')})`;
+  return `Group ${side.group} #${side.pos}`;
+}
+
+function getQualifierLabel(roundId, matchIdx) {
+  if (roundId === 'r32' && R32_PAIRINGS[matchIdx]) {
+    const q = R32_PAIRINGS[matchIdx];
+    return `${r32SideLabel(q.home)} vs ${r32SideLabel(q.away)}`;
   }
 
   // For R16+, show proper round names
@@ -933,29 +942,7 @@ function getQualifierLabel(roundId, matchIdx) {
 }
 
 function getQualifierGroupsForR32(matchIdx) {
-  // Returns { homeGroup, awayGroup, awayIsThirdPlace, thirdPlaceGroups }
-  // for dropdown filtering in R32 matches
-  const r32Qualifiers = [
-    // Fixed: Winner vs Runner-up (positions 0-11)
-    { homeGroup: 'A', awayGroup: 'B', awayIsThirdPlace: false },
-    { homeGroup: 'C', awayGroup: 'D', awayIsThirdPlace: false },
-    { homeGroup: 'E', awayGroup: 'F', awayIsThirdPlace: false },
-    { homeGroup: 'G', awayGroup: 'H', awayIsThirdPlace: false },
-    { homeGroup: 'I', awayGroup: 'J', awayIsThirdPlace: false },
-    { homeGroup: 'K', awayGroup: 'L', awayIsThirdPlace: false },
-    { homeGroup: 'B', awayGroup: 'A', awayIsThirdPlace: false },
-    { homeGroup: 'D', awayGroup: 'C', awayIsThirdPlace: false },
-    { homeGroup: 'F', awayGroup: 'E', awayIsThirdPlace: false },
-    { homeGroup: 'H', awayGroup: 'G', awayIsThirdPlace: false },
-    { homeGroup: 'J', awayGroup: 'I', awayIsThirdPlace: false },
-    { homeGroup: 'L', awayGroup: 'K', awayIsThirdPlace: false },
-    // Third-place teams (positions 12-15)
-    { homeGroup: 'A', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['B','C','D','F'] },
-    { homeGroup: 'B', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['D','E','F','G','I'] },
-    { homeGroup: 'C', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['E','F','H','I','J'] },
-    { homeGroup: 'D', awayGroup: null, awayIsThirdPlace: true, thirdPlaceGroups: ['F','G','H','I','J','K'] },
-  ];
-  return r32Qualifiers[matchIdx] || null;
+  return R32_PAIRINGS[matchIdx] || null;
 }
 
 function bktCard(roundId, idx, hasSelects, locked) {
@@ -980,22 +967,28 @@ function bktCard(roundId, idx, hasSelects, locked) {
       ? (() => {
           let options = teamOptions(slot[side]);
           if (roundId === 'r32') {
-            const groups = getQualifierGroupsForR32(idx);
+            const pair = getQualifierGroupsForR32(idx);
+            const sideSpec = pair ? (side === 'home' ? pair.home : pair.away) : null;
             let teamCodes = [];
-            if (groups) {
-              if (side === 'home') {
-                const groupData = WC.groups.find(g => g.id === groups.homeGroup);
-                teamCodes = groupData?.teams || [];
+            if (sideSpec) {
+              if (sideSpec.groups) {
+                // Third-place pool: union of teams from candidate groups,
+                // minus teams already picked as 1st/2nd in OTHER R32 matches.
+                teamCodes = WC.groups
+                  .filter(g => sideSpec.groups.includes(g.id))
+                  .flatMap(g => g.teams);
+                const r32 = S.koPredictions.r32 || [];
+                const pickedInNonThird = new Set();
+                R32_PAIRINGS.forEach((p, i) => {
+                  if (i === idx) return;
+                  if (p.home.groups || p.away.groups) return; // skip 3rd-place matches
+                  if (r32[i]?.home) pickedInNonThird.add(r32[i].home);
+                  if (r32[i]?.away) pickedInNonThird.add(r32[i].away);
+                });
+                teamCodes = teamCodes.filter(code => !pickedInNonThird.has(code));
               } else {
-                if (groups.awayIsThirdPlace) {
-                  const thirdGroupIds = groups.thirdPlaceGroups || [];
-                  teamCodes = WC.groups
-                    .filter(g => thirdGroupIds.includes(g.id))
-                    .flatMap(g => g.teams);
-                } else {
-                  const groupData = WC.groups.find(g => g.id === groups.awayGroup);
-                  teamCodes = groupData?.teams || [];
-                }
+                const groupData = WC.groups.find(g => g.id === sideSpec.group);
+                teamCodes = groupData?.teams || [];
               }
             }
             options = teamCodes
@@ -1097,48 +1090,37 @@ function autoFillKo() {
 
   const qualifiedThirdPlaces = thirdPlaceData.slice(0, 8);
 
-  // Third-place team slot constraints for positions 12-15
-  // position 12: A1 vs 3rd from B/C/D/F
-  // position 13: B1 vs 3rd from D/E/F/G/I
-  // position 14: C1 vs 3rd from E/F/H/I/J
-  // position 15: D1 vs 3rd from F/G/H/I/J/K
-  const thirdPlaceSlots = [
-    { pos: 12, groups: ['B', 'C', 'D', 'F'] },
-    { pos: 13, groups: ['D', 'E', 'F', 'G', 'I'] },
-    { pos: 14, groups: ['E', 'F', 'H', 'I', 'J'] },
-    { pos: 15, groups: ['F', 'G', 'H', 'I', 'J', 'K'] },
-  ];
-
-  // Assign third-place teams to slots based on group and ranking
-  const thirdPlaceAssignments = {};
+  // Resolve a side spec ({group,pos} or {groups,pos:3}) to a team code.
+  // For third-place slots, use the best qualified third-placer from the
+  // allowed groups that hasn't been assigned yet.
   const usedThirdPlaces = new Set();
-
-  thirdPlaceSlots.forEach(slot => {
-    // Find the highest-ranked qualified third-place team from allowed groups
-    for (const tp of qualifiedThirdPlaces) {
-      if (slot.groups.includes(tp.group) && !usedThirdPlaces.has(tp.code)) {
-        thirdPlaceAssignments[slot.pos] = tp.code;
-        usedThirdPlaces.add(tp.code);
-        break;
+  const resolveSide = (side) => {
+    if (side.groups) {
+      for (const tp of qualifiedThirdPlaces) {
+        if (side.groups.includes(tp.group) && !usedThirdPlaces.has(tp.code)) {
+          usedThirdPlaces.add(tp.code);
+          return tp.code;
+        }
       }
+      return '';
     }
+    const t = tops[side.group];
+    if (!t) return '';
+    return side.pos === 1 ? (t.first || '') : (t.second || '');
+  };
+
+  // Resolve all 3rd-place slots first so the global "highest-ranked first"
+  // rule isn't biased by array order of non-3rd matches.
+  const thirdResolved = {};
+  R32_PAIRINGS.forEach((pair, i) => {
+    if (pair.away.groups) thirdResolved[`${i}-away`] = resolveSide(pair.away);
+    if (pair.home.groups) thirdResolved[`${i}-home`] = resolveSide(pair.home);
   });
 
-  // R32 bracket positions based on official FIFA 2026 structure
-  const r32Pairs = [
-    // Positions 0-11: Winner vs Runner-up
-    [tops.A?.first, tops.B?.second], [tops.C?.first, tops.D?.second],
-    [tops.E?.first, tops.F?.second], [tops.G?.first, tops.H?.second],
-    [tops.I?.first, tops.J?.second], [tops.K?.first, tops.L?.second],
-    [tops.B?.first, tops.A?.second], [tops.D?.first, tops.C?.second],
-    [tops.F?.first, tops.E?.second], [tops.H?.first, tops.G?.second],
-    [tops.J?.first, tops.I?.second], [tops.L?.first, tops.K?.second],
-    // Positions 12-15: Winner vs Third-place
-    [tops.A?.first, thirdPlaceAssignments[12] || ''],
-    [tops.B?.first, thirdPlaceAssignments[13] || ''],
-    [tops.C?.first, thirdPlaceAssignments[14] || ''],
-    [tops.D?.first, thirdPlaceAssignments[15] || ''],
-  ];
+  const r32Pairs = R32_PAIRINGS.map((pair, i) => [
+    pair.home.groups ? (thirdResolved[`${i}-home`] || '') : resolveSide(pair.home),
+    pair.away.groups ? (thirdResolved[`${i}-away`] || '') : resolveSide(pair.away),
+  ]);
 
   S.koPredictions.r32 = r32Pairs.map(([h, a]) => ({home: h||'', away: a||'', winner: ''}));
   cascadeWinners();
