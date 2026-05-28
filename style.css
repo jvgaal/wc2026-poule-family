@@ -1827,6 +1827,11 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
 .empty-state p  { font-size: 14px; max-width: 340px; margin: 0 auto 20px; }
 
 /* ── ADMIN GATE ── */
+#admin-gate-wrap { display: block; }
+#admin-gate-wrap.active { display: none; }
+#admin-content   { display: none; }
+#admin-content.active { display: block; }
+
 .admin-gate {
   max-width: 400px;
   margin: 60px auto;
