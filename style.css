@@ -661,11 +661,16 @@ html[data-theme="dark"] #howto-prize-list span { color: var(--text-sub); }
 /* Howto body strong text always visible */
 .howto-body strong { color: var(--text); }
 
-/* Standings table labels */
+/* Standings table — predictions tab always uses green bg, so always dark text */
 html[data-theme="light"] .standings-title { color: #14201a; }
 html[data-theme="light"] .std-pts { color: #14201a; }
 html[data-theme="light"] .stat-pill .lbl { color: #546852; }
 html[data-theme="light"] .standings-table td { color: #14201a; }
+html[data-theme="dark"] .standings-title { color: rgba(20,32,26,0.9); }
+html[data-theme="dark"] .standings-table th { color: rgba(20,32,26,0.6); }
+html[data-theme="dark"] .standings-table td { color: #14201a; }
+html[data-theme="dark"] .std-team { color: #14201a; }
+html[data-theme="dark"] .std-pts { color: var(--green); }
 .howto-body p { margin-bottom: 8px; }
 .howto-body ul { padding-left: 18px; margin-bottom: 8px; }
 .howto-body li { margin-bottom: 4px; }
@@ -743,7 +748,7 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
 
 .match-label {
   font-size: 11px;
-  color: var(--text-dim);
+  color: rgba(20,32,26,0.55);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -770,7 +775,7 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
 .team-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  color: #14201a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -817,14 +822,14 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
   font-weight: 800;
   min-width: 36px;
   text-align: center;
-  color: var(--text);
+  color: #14201a;
   font-variant-numeric: tabular-nums;
 }
 
 .score-sep {
   font-size: 22px;
   font-weight: 300;
-  color: var(--text-dim);
+  color: rgba(20,32,26,0.5);
 }
 
 .match-footer {
@@ -835,7 +840,7 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
   padding-top: 12px;
   border-top: 1px solid var(--border);
   font-size: 12px;
-  color: var(--text-dim);
+  color: rgba(20,32,26,0.55);
 }
 
 .result-badge {
@@ -855,7 +860,7 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
 
 .actual-result {
   font-size: 12px;
-  color: var(--text-sub);
+  color: rgba(20,32,26,0.7);
   display: flex;
   align-items: center;
   gap: 6px;

@@ -995,7 +995,7 @@ function renderStandingsTable(standings, groupId) {
   return `
   <div class="standings-card" style="margin-top:20px">
     <div class="standings-title">📊 Predicted Standings — Group ${groupId}
-      <span style="float:right;font-weight:400;color:var(--text-dim)">
+      <span style="float:right;font-weight:400;color:rgba(20,32,26,0.55)">
         <span style="color:var(--green)">■</span> Advance  <span style="color:var(--yellow)">■</span> Possible 3rd
       </span>
     </div>
