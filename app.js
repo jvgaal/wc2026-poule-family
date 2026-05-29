@@ -866,7 +866,7 @@ function renderGroupContent(groupId) {
       <div style="font-size:18px;font-weight:700;color:#14201a">Group ${groupId}</div>
       <div class="progress-mini">
         <div class="progress-track"><div class="progress-fill" style="width:${Math.round(filled/6*100)}%"></div></div>
-        <span>${filled}/6 filled</span>
+        <span class="progress-label">${filled}/6 filled</span>
       </div>
     </div>
     ${matchCards}
