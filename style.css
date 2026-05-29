@@ -326,8 +326,15 @@ html[data-theme="light"] .bkt-hint,
 html[data-theme="light"] .bkt-adv,
 html[data-theme="light"] .empty-state h3 { color: #14201a; }
 html[data-theme="light"] .empty-state p { color: rgba(20, 32, 26, 0.78); }
-html[data-theme="dark"] .bkt-hint,
-html[data-theme="dark"] .bkt-adv { color: #8a9b8e; }
+/* Knockout bracket — dark backgrounds → light text */
+html[data-theme="dark"] .bkt-col-name   { color: #e8e8e8; }
+html[data-theme="dark"] .bkt-col-pts    { color: #e8e8e8; }
+html[data-theme="dark"] .bkt-center-lbl { color: #e8e8e8; }
+html[data-theme="dark"] .bkt-mnum       { color: #e8e8e8; }
+html[data-theme="dark"] .bkt-adv        { color: #c8c8c8; }
+html[data-theme="dark"] .bkt-slot.filled,
+html[data-theme="dark"] .bkt-tname      { color: #ffffff; }
+html[data-theme="dark"] .bkt-hint       { color: rgba(255,255,255,0.55); }
 html[data-theme="dark"] .empty-state h3 { color: var(--text); }
 html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
 
