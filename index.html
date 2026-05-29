@@ -394,6 +394,10 @@
     </div>
 
     <div id="manual-login-block">
+      <div id="login-picker"></div>
+      <div id="login-trusted-badge" class="login-trusted-badge" style="display:none">
+        ✓ Trusted device — pick your name to sign back in
+      </div>
       <div class="form-group">
         <label class="form-label">Your Name</label>
         <input class="form-input" id="login-name" type="text"
@@ -404,13 +408,16 @@
         <input class="form-input" id="login-nickname" type="text"
                placeholder="e.g. The Iron Tulip" maxlength="20" autocomplete="off" />
       </div>
-      <div class="form-group">
+      <div class="form-group" id="login-family-pw-group">
         <label class="form-label">Family password</label>
         <input class="form-input" id="login-family-pw" type="password"
                placeholder="Ask Jorg" autocomplete="off" />
       </div>
       <button class="btn btn-primary" id="login-btn" style="width:100%;justify-content:center;padding:10px;margin-top:4px">
         Join the Poule ⚽
+      </button>
+      <button type="button" id="login-untrust-btn" class="login-untrust-link" style="display:none">
+        Use a different family password
       </button>
     </div>
   </div>

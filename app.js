@@ -308,13 +308,13 @@ function bindNav() {
   });
 }
 
-function initMobileNav() {
+function rebuildMobileNavItems() {
   const dropdown = document.getElementById('nav-mobile-dropdown');
-  const trigger = document.getElementById('nav-mobile-trigger');
-  if (!trigger || !dropdown) return;
-
-  // Build dropdown items from the desktop nav tabs
+  if (!dropdown) return;
+  dropdown.innerHTML = '';
+  const adminAllowed = S.isAdmin || S.adminUnlocked;
   document.querySelectorAll('.nav-tab').forEach(tab => {
+    if (tab.dataset.tab === 'admin' && !adminAllowed) return;
     const item = document.createElement('button');
     item.className = 'nav-mobile-item';
     item.dataset.tab = tab.dataset.tab;
@@ -322,6 +322,15 @@ function initMobileNav() {
     item.addEventListener('click', () => switchTab(tab.dataset.tab));
     dropdown.appendChild(item);
   });
+  updateMobileNavActive();
+}
+
+function initMobileNav() {
+  const dropdown = document.getElementById('nav-mobile-dropdown');
+  const trigger = document.getElementById('nav-mobile-trigger');
+  if (!trigger || !dropdown) return;
+
+  rebuildMobileNavItems();
 
   trigger.addEventListener('click', e => {
     e.stopPropagation();
@@ -333,6 +342,11 @@ function initMobileNav() {
     if (!trigger.contains(e.target) && !dropdown.contains(e.target)) {
       closeMobileNav();
     }
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMobileNav();
   });
 }
 
@@ -529,6 +543,124 @@ function headToHeadResult(groupId, teamA, teamB, preds) {
   return 0;
 }
 
+// ── Actual-results helpers (admin) ──────────────────────
+// These mirror the prediction-based standings/bracket logic but read the
+// REAL entered results (S.results), so the admin's KO result grid shows the
+// genuine qualified teams — never the admin's own bracket predictions.
+
+function groupResultsComplete(groupId) {
+  return WC.matchesByGroup[groupId].every(m => {
+    const r = S.results[m.id];
+    return r && r.home !== undefined && r.home !== '' && r.away !== undefined && r.away !== '';
+  });
+}
+
+function calcGroupStandingsFromResults(groupId) {
+  const group = WC.groups.find(g => g.id === groupId);
+  const tbl = {};
+  group.teams.forEach(c => { tbl[c] = { code: c, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 }; });
+
+  WC.matchesByGroup[groupId].forEach(m => {
+    const r = S.results[m.id];
+    if (!r || r.home === undefined || r.home === '' || r.away === undefined || r.away === '') return;
+    const h = +r.home, a = +r.away;
+    tbl[m.home].mp++; tbl[m.away].mp++;
+    tbl[m.home].gf += h; tbl[m.home].ga += a;
+    tbl[m.away].gf += a; tbl[m.away].ga += h;
+    if (h > a) { tbl[m.home].w++; tbl[m.home].pts += 3; tbl[m.away].l++; }
+    else if (h < a) { tbl[m.away].w++; tbl[m.away].pts += 3; tbl[m.home].l++; }
+    else { tbl[m.home].d++; tbl[m.home].pts++; tbl[m.away].d++; tbl[m.away].pts++; }
+  });
+
+  return Object.values(tbl).sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    const gdA = b.gf - b.ga, gdB = a.gf - a.ga;
+    if (gdA !== gdB) return gdA - gdB;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    // S.results shares the {home,away} shape headToHeadResult expects
+    return headToHeadResult(group.id, a.code, b.code, S.results);
+  });
+}
+
+// Resolve the 16 Round-of-32 matchups from actual results. Any slot whose
+// source group(s) aren't fully played yet resolves to '' (TBD).
+function resolveActualR32() {
+  const tops = {};
+  WC.groups.forEach(g => {
+    if (!groupResultsComplete(g.id)) { tops[g.id] = null; return; }
+    const s = calcGroupStandingsFromResults(g.id);
+    tops[g.id] = { first: s[0]?.code || '', second: s[1]?.code || '' };
+  });
+
+  // Third-place ranking only makes sense once every group is complete.
+  const allComplete = WC.groups.every(g => groupResultsComplete(g.id));
+  let qualifiedThirdPlaces = [];
+  if (allComplete) {
+    const thirdPlaceData = WC.groups.map(g => {
+      const s = calcGroupStandingsFromResults(g.id);
+      return { group: g.id, code: s[2]?.code || '', pts: s[2]?.pts || 0,
+               gd: (s[2]?.gf || 0) - (s[2]?.ga || 0), gf: s[2]?.gf || 0 };
+    }).filter(t => t.code);
+    thirdPlaceData.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
+    qualifiedThirdPlaces = thirdPlaceData.slice(0, 8);
+  }
+
+  const usedThird = new Set();
+  const resolveSide = (side) => {
+    if (side.groups) {
+      if (!allComplete) return '';
+      for (const tp of qualifiedThirdPlaces) {
+        if (side.groups.includes(tp.group) && !usedThird.has(tp.code)) {
+          usedThird.add(tp.code);
+          return tp.code;
+        }
+      }
+      return '';
+    }
+    const t = tops[side.group];
+    if (!t) return '';
+    return side.pos === 1 ? (t.first || '') : (t.second || '');
+  };
+
+  // Resolve 3rd-place slots first (matches autoFillKo's global ordering)
+  const thirdResolved = {};
+  R32_PAIRINGS.forEach((pair, i) => {
+    if (pair.away.groups) thirdResolved[`${i}-away`] = resolveSide(pair.away);
+    if (pair.home.groups) thirdResolved[`${i}-home`] = resolveSide(pair.home);
+  });
+
+  return R32_PAIRINGS.map((pair, i) => ({
+    home: pair.home.groups ? (thirdResolved[`${i}-home`] || '') : resolveSide(pair.home),
+    away: pair.away.groups ? (thirdResolved[`${i}-away`] || '') : resolveSide(pair.away),
+  }));
+}
+
+// Resolve the real matchups for any KO round from entered results. Later
+// rounds feed off the winners recorded in the previous round's results.
+function resolveActualKoMatchups(roundId) {
+  if (roundId === 'r32') return resolveActualR32();
+
+  const winnerOf = (round, i) => S.results[`ko_${round}`]?.[i]?.winner || '';
+  const loserOf = (round, i) => {
+    const res = S.results[`ko_${round}`]?.[i];
+    if (!res || !res.winner) return '';
+    const m = resolveActualKoMatchups(round)[i] || {};
+    if (res.winner === m.home) return m.away || '';
+    if (res.winner === m.away) return m.home || '';
+    return '';
+  };
+
+  const round = WC.koRounds.find(r => r.id === roundId);
+  const n = round?.matches || 0;
+
+  if (roundId === 'r16')   return Array.from({ length: n }, (_, i) => ({ home: winnerOf('r32', i*2), away: winnerOf('r32', i*2+1) }));
+  if (roundId === 'qf')    return Array.from({ length: n }, (_, i) => ({ home: winnerOf('r16', i*2), away: winnerOf('r16', i*2+1) }));
+  if (roundId === 'sf')    return Array.from({ length: n }, (_, i) => ({ home: winnerOf('qf',  i*2), away: winnerOf('qf',  i*2+1) }));
+  if (roundId === 'final') return [{ home: winnerOf('sf', 0), away: winnerOf('sf', 1) }];
+  if (roundId === 'third') return [{ home: loserOf('sf', 0),  away: loserOf('sf', 1) }];
+  return Array.from({ length: n }, () => ({ home: '', away: '' }));
+}
+
 // ══════════════════════════════════════════════════════
 //  LEADERBOARD VIEW
 // ══════════════════════════════════════════════════════
@@ -555,10 +687,13 @@ function renderLeaderboard() {
     }
   });
 
-  // Build ranked user list
+  // Build ranked user list — union of registered users AND anyone with
+  // predictions on the server (the Users sheet can lag the Predictions sheet,
+  // so iterating allUsers alone would drop active players).
   const allUserIds = new Set();
   if (S.user) allUserIds.add(S.user.id);
   S.allUsers.forEach(u => allUserIds.add(u.id));
+  Object.keys(S.allPredictions).forEach(id => allUserIds.add(id));
 
   const getUserObj = id => {
     if (S.user && id === S.user.id) return S.user;
@@ -1290,6 +1425,7 @@ function renderUserGrid(filter) {
   const allIds = new Set();
   if (S.user) allIds.add(S.user.id);
   S.allUsers.forEach(u => allIds.add(u.id));
+  Object.keys(S.allPredictions).forEach(id => allIds.add(id));
 
   const getUserObj = id => {
     if (S.user && id === S.user.id) return S.user;
@@ -1454,6 +1590,7 @@ async function unlockAdmin() {
   localStorage.setItem('wc26_is_admin', '1');
   S.isAdmin = true;
   document.getElementById('admin-tab').style.display = '';
+  rebuildMobileNavItems();
   btn.disabled    = false;
   btn.textContent = 'Unlock';
   document.getElementById('admin-gate-wrap').classList.add('hidden');
@@ -1625,13 +1762,15 @@ function renderAdminKoResultGrid(roundId) {
   if (!el) return;
   const round = WC.koRounds.find(r => r.id === roundId);
   const resArr = S.results[`ko_${roundId}`] || Array(round.matches).fill(null);
-  const koPreds = S.koPredictions[roundId] || [];
+  // Matchups come from ACTUAL entered results, not the admin's own bracket —
+  // so teams only appear once the feeding results are in (TBD otherwise).
+  const matchups = resolveActualKoMatchups(roundId);
 
   el.innerHTML = Array.from({ length: round.matches }, (_, i) => {
     const res  = resArr[i] || {};
-    const pred = koPreds[i] || {};
-    const homeTeam = pred.home ? WC.teams[pred.home] : null;
-    const awayTeam = pred.away ? WC.teams[pred.away] : null;
+    const mu   = matchups[i] || {};
+    const homeTeam = mu.home ? WC.teams[mu.home] : null;
+    const awayTeam = mu.away ? WC.teams[mu.away] : null;
     const homeScore = res.home ?? '';
     const awayScore = res.away ?? '';
     const winner = res.winner || '';
@@ -1661,8 +1800,8 @@ function renderAdminKoResultGrid(roundId) {
         <select style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px"
                 onchange="saveKoResult('${roundId}',${i},this.value)">
           <option value="">— Auto / Draw —</option>
-          ${homeTeam ? `<option value="${pred.home}" ${winner === pred.home ? 'selected' : ''}>${homeTeam.flag} ${homeTeam.name}</option>` : ''}
-          ${awayTeam ? `<option value="${pred.away}" ${winner === pred.away ? 'selected' : ''}>${awayTeam.flag} ${awayTeam.name}</option>` : ''}
+          ${homeTeam ? `<option value="${mu.home}" ${winner === mu.home ? 'selected' : ''}>${homeTeam.flag} ${homeTeam.name}</option>` : ''}
+          ${awayTeam ? `<option value="${mu.away}" ${winner === mu.away ? 'selected' : ''}>${awayTeam.flag} ${awayTeam.name}</option>` : ''}
         </select>
       </div>
     </div>`;
@@ -1682,15 +1821,15 @@ function saveKoResultScore(roundId, idx, side, val) {
   if (!S.results[`ko_${roundId}`][idx]) S.results[`ko_${roundId}`][idx] = {};
   const num = val === '' ? '' : Math.max(0, Math.min(20, parseInt(val, 10) || 0));
   S.results[`ko_${roundId}`][idx][side] = num;
-  // Auto-determine winner from scores if both are set
+  // Auto-determine winner from scores if both are set — using the ACTUAL
+  // matchup derived from results, not the admin's bracket predictions.
   const res = S.results[`ko_${roundId}`][idx];
   if (res.home !== '' && res.away !== '') {
+    const mu = resolveActualKoMatchups(roundId)[idx] || {};
     if (res.home > res.away) {
-      const koPred = S.koPredictions[roundId]?.[idx];
-      res.winner = koPred?.home || '';
+      res.winner = mu.home || '';
     } else if (res.away > res.home) {
-      const koPred = S.koPredictions[roundId]?.[idx];
-      res.winner = koPred?.away || '';
+      res.winner = mu.away || '';
     } else {
       res.winner = ''; // draw, no winner yet
     }
@@ -1743,6 +1882,7 @@ function exportCSV() {
   const allIds = new Set([
     ...(S.user ? [S.user.id] : []),
     ...S.allUsers.map(u => u.id),
+    ...Object.keys(S.allPredictions),
   ]);
   const getUserObj = id => {
     if (S.user && id === S.user.id) return S.user;
@@ -1866,8 +2006,10 @@ function signOut() {
 // Returns the name to display publicly for any user object
 function displayName(user) {
   if (!user) return '?';
-  if (S.user && user.id === S.user.id) return S.user.nickname || S.user.name.split(' ')[0];
-  return user.name || user.id;   // for other users, name IS their stored nickname
+  if (S.user && user.id === S.user.id) {
+    return S.user.nickname || String(S.user.name || '').split(' ')[0] || '?';
+  }
+  return user.name || user.id || '?';   // for other users, name IS their stored nickname
 }
 
 function showNicknameStep(suggestedName) {
@@ -1940,8 +2082,91 @@ function pickColor(el, color) {
   if (S.user) { S.user.color = color; updateHeaderUser(); }
 }
 
+// ── Family-password "trusted device" helpers ──
+function familyPwFingerprint(pw) {
+  // tiny hash so a password change invalidates the trust flag
+  let h = 0;
+  for (let i = 0; i < pw.length; i++) h = ((h << 5) - h + pw.charCodeAt(i)) | 0;
+  return `v1_${h}`;
+}
+function isFamilyTrusted() {
+  try {
+    return localStorage.getItem('wc26_family_trusted') === familyPwFingerprint(CONFIG.FAMILY_PASSWORD);
+  } catch(e) { return false; }
+}
+function markFamilyTrusted() {
+  try { localStorage.setItem('wc26_family_trusted', familyPwFingerprint(CONFIG.FAMILY_PASSWORD)); } catch(e) {}
+}
+function clearFamilyTrust() {
+  try { localStorage.removeItem('wc26_family_trusted'); } catch(e) {}
+}
+
+function listKnownUsers() {
+  try {
+    const map = JSON.parse(localStorage.getItem('wc26_users_by_name') || '{}');
+    return Object.entries(map).map(([name, u]) => ({ name, ...u }));
+  } catch(e) { return []; }
+}
+
+function renderLoginPicker() {
+  const wrap   = document.getElementById('login-picker');
+  const badge  = document.getElementById('login-trusted-badge');
+  const pwGrp  = document.getElementById('login-family-pw-group');
+  const untrust = document.getElementById('login-untrust-btn');
+  if (!wrap) return;
+
+  const trusted = isFamilyTrusted();
+  const users   = listKnownUsers();
+
+  // Toggle the password field visibility
+  if (pwGrp)   pwGrp.style.display   = trusted ? 'none' : '';
+  if (badge)   badge.style.display   = trusted ? '' : 'none';
+  if (untrust) untrust.style.display = trusted ? '' : 'none';
+
+  if (!users.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = `
+    <div class="login-picker-label">Continue as</div>
+    <div class="login-picker-chips">
+      ${users.map(u => `
+        <button type="button" class="login-chip" data-name="${u.name.replace(/"/g,'&quot;')}">
+          <span class="login-chip-avatar" style="background:${u.color || '#7DC242'}">${(u.nickname || u.name).slice(0,1).toUpperCase()}</span>
+          <span class="login-chip-text">
+            <span class="login-chip-nick">${u.nickname || u.name}</span>
+            <span class="login-chip-name">${u.name}</span>
+          </span>
+        </button>
+      `).join('')}
+    </div>
+    <div class="login-picker-divider"><span>or sign in below</span></div>
+  `;
+
+  wrap.querySelectorAll('.login-chip').forEach(chip => {
+    chip.addEventListener('click', () => pickKnownUser(chip.dataset.name));
+  });
+}
+
+function pickKnownUser(name) {
+  const u = lookupUserByName(name);
+  if (!u) return;
+  const nameEl = document.getElementById('login-name');
+  const nickEl = document.getElementById('login-nickname');
+  if (nameEl) nameEl.value = name;
+  if (nickEl) nickEl.value = u.nickname || '';
+  const dot = document.querySelector(`.color-dot[data-color="${u.color}"]`);
+  document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+  dot?.classList.add('selected');
+
+  if (isFamilyTrusted()) {
+    registerUser();
+  } else {
+    document.getElementById('login-family-pw')?.focus();
+  }
+}
+
 function openModal() {
   document.getElementById('modal-overlay').classList.add('open');
+  renderLoginPicker();
   document.getElementById('login-name')?.focus();
 }
 
@@ -1991,6 +2216,13 @@ function bindModal() {
     if (e.key === 'Enter') registerUser();
   }));
 
+  // "Use a different family password" — clears trust flag and re-renders picker
+  document.getElementById('login-untrust-btn')?.addEventListener('click', () => {
+    clearFamilyTrust();
+    renderLoginPicker();
+    document.getElementById('login-family-pw')?.focus();
+  });
+
   // Header user button — open menu if logged in, modal if not
   document.getElementById('user-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2009,10 +2241,13 @@ function registerUser() {
 
   if (!name)     { nameEl?.focus(); showToast('Please enter your name', 'error'); return; }
   if (!nickname) { nickEl?.focus(); showToast('Please enter a nickname', 'error'); return; }
-  if (familyPw !== CONFIG.FAMILY_PASSWORD) {
-    pwEl?.focus();
-    showToast('Wrong family password', 'error');
-    return;
+  if (!isFamilyTrusted()) {
+    if (familyPw !== CONFIG.FAMILY_PASSWORD) {
+      pwEl?.focus();
+      showToast('Wrong family password', 'error');
+      return;
+    }
+    markFamilyTrusted();
   }
 
   const selectedDot = document.querySelector('.color-dot.selected');
@@ -2084,8 +2319,8 @@ function esc(str) {
 }
 
 function avatarHtml(user, size = 28) {
-  const displayStr = user.nickname || user.name || '?';
-  const initials = displayStr.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+  const displayStr = String(user?.nickname || user?.name || '?');
+  const initials = displayStr.split(' ').map(p => p[0] || '').slice(0, 2).join('').toUpperCase() || '?';
   const profilePhoto = getProfilePhoto(user);
   if (profilePhoto) {
     return `<img class="avatar" src="assets/${profilePhoto}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover" alt="${esc(displayStr)}" />`;
@@ -2104,7 +2339,7 @@ const PROFILE_PHOTOS = {
 };
 
 function getProfilePhoto(user) {
-  const key = (user.nickname || user.name || '').toLowerCase().replace(/\s+/g, '');
+  const key = String(user?.nickname || user?.name || '').toLowerCase().replace(/\s+/g, '');
   return PROFILE_PHOTOS[key] || null;
 }
 
