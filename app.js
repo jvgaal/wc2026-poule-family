@@ -96,6 +96,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Fetch remote data in background; re-render when ready
   await fetchRemote();
   renderActiveView();
+  // Now that the server roster is loaded, refresh the login picker so the
+  // tap-to-login name chips appear on this (possibly new) device.
+  if (!S.user) renderLoginPicker();
 });
 
 // ══════════════════════════════════════════════════════
@@ -141,6 +144,52 @@ function persistUserByName(name, user) {
     map[name] = { id: user.id, nickname: user.nickname, color: user.color };
     localStorage.setItem('wc26_users_by_name', JSON.stringify(map));
   } catch(e) {}
+}
+
+// ── Stable cross-device identity ────────────────────────
+// A player's NAME is their identity. We normalise it (case/space/accent-
+// insensitive) so the same person resolves to the same account on any device,
+// regardless of the nickname they type. New players get a deterministic
+// `fam_<name>` id so two fresh devices with the same name still converge;
+// existing players are matched against the server roster to reuse their id
+// (and therefore their predictions).
+function normalizeName(name) {
+  return String(name || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
+    .replace(/[^a-z0-9]+/g, '');                        // strip spaces/punctuation
+}
+
+function userIdFromName(name) {
+  return `fam_${normalizeName(name)}`;
+}
+
+// Find a player already on the server by (normalised) name — authoritative id
+function findServerUserByName(name) {
+  const n = normalizeName(name);
+  if (!n) return null;
+  return S.allUsers.find(u => normalizeName(u.name) === n) || null;
+}
+
+// Merge the local "known users" cache with the server roster (deduped by
+// normalised name) so the login picker shows everyone on every device. The
+// server entry wins for the id, since that's the canonical account.
+function rosterForPicker() {
+  const byKey = {};
+  listKnownUsers().forEach(u => {
+    const k = normalizeName(u.name);
+    if (k) byKey[k] = { name: u.name, id: u.id, nickname: u.nickname || '', color: u.color || '#7DC242' };
+  });
+  S.allUsers.forEach(u => {
+    const k = normalizeName(u.name);
+    if (!k) return;
+    byKey[k] = {
+      name: u.name,
+      id: u.id,
+      nickname: u.nickname || byKey[k]?.nickname || '',
+      color: u.color || byKey[k]?.color || '#7DC242',
+    };
+  });
+  return Object.values(byKey).filter(u => u.name);
 }
 
 function lookupNickname(userId) {
@@ -2116,7 +2165,7 @@ function renderLoginPicker() {
   if (!wrap) return;
 
   const trusted = isFamilyTrusted();
-  const users   = listKnownUsers();
+  const users   = rosterForPicker();
 
   // Toggle the password field visibility
   if (pwGrp)   pwGrp.style.display   = trusted ? 'none' : '';
@@ -2128,15 +2177,18 @@ function renderLoginPicker() {
   wrap.innerHTML = `
     <div class="login-picker-label">Continue as</div>
     <div class="login-picker-chips">
-      ${users.map(u => `
-        <button type="button" class="login-chip" data-name="${u.name.replace(/"/g,'&quot;')}">
-          <span class="login-chip-avatar" style="background:${u.color || '#7DC242'}">${(u.nickname || u.name).slice(0,1).toUpperCase()}</span>
+      ${users.map(u => {
+        const nm   = String(u.name ?? '');
+        const nick = String(u.nickname || nm);
+        return `
+        <button type="button" class="login-chip" data-name="${esc(nm)}">
+          <span class="login-chip-avatar" style="background:${u.color || '#7DC242'}">${(nick || nm).slice(0,1).toUpperCase()}</span>
           <span class="login-chip-text">
-            <span class="login-chip-nick">${u.nickname || u.name}</span>
-            <span class="login-chip-name">${u.name}</span>
+            <span class="login-chip-nick">${esc(nick)}</span>
+            <span class="login-chip-name">${esc(nm)}</span>
           </span>
-        </button>
-      `).join('')}
+        </button>`;
+      }).join('')}
     </div>
     <div class="login-picker-divider"><span>or sign in below</span></div>
   `;
@@ -2147,12 +2199,13 @@ function renderLoginPicker() {
 }
 
 function pickKnownUser(name) {
-  const u = lookupUserByName(name);
-  if (!u) return;
+  // Resolve from the server roster first (works on any device), then local cache
+  const su = findServerUserByName(name);
+  const u  = su || lookupUserByName(name) || { nickname: '', color: '#7DC242' };
   const nameEl = document.getElementById('login-name');
   const nickEl = document.getElementById('login-nickname');
   if (nameEl) nameEl.value = name;
-  if (nickEl) nickEl.value = u.nickname || '';
+  if (nickEl) nickEl.value = u.nickname || name;   // fall back to name so login isn't blocked
   const dot = document.querySelector(`.color-dot[data-color="${u.color}"]`);
   document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
   dot?.classList.add('selected');
@@ -2253,18 +2306,22 @@ function registerUser() {
   const selectedDot = document.querySelector('.color-dot.selected');
   const color = selectedDot?.dataset.color || '#7DC242';
 
-  // Returning user? Look them up by name to reuse their stable ID, nickname, color
-  const existing = lookupUserByName(name);
+  // Returning user? Match by name — first the server roster (authoritative,
+  // works across devices), then this device's local cache. Reusing the id
+  // keeps their existing predictions. New players get a deterministic id
+  // derived from their name, so logging in from another device (or with a
+  // different nickname) lands on the SAME account instead of forking.
+  const existing = findServerUserByName(name) || lookupUserByName(name);
 
   if (existing) {
-    S.user = { ...S.user, id: existing.id, name, nickname: existing.nickname, color: existing.color, email: '' };
+    S.user = { ...S.user, id: existing.id, name, nickname: nickname || existing.nickname || '', color, email: '' };
   } else {
-    const newId = `u_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+    const newId = userIdFromName(name);
     S.user = S.user
       ? { ...S.user, id: newId, name, nickname, color }
       : { id: newId, name, nickname, color, email: '' };
-    persistUserByName(name, S.user);
   }
+  persistUserByName(name, S.user);
 
   persistNickname(S.user.id, S.user.nickname);
   saveLocal();
