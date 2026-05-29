@@ -17,6 +17,20 @@ const CONFIG = {
 
 const MAX_POSSIBLE = 341; // 144 group + 157 knockout + 40 bonus
 
+// Fixed family roster — tap-to-pick login. Each player has a STABLE id, so the
+// same person is the same account on every device (no typing, no duplicates).
+// The first three ids are pre-existing accounts whose predictions we preserve;
+// the rest get deterministic ids. Names match the assets/<Name> profile photos.
+const FAMILY_ROSTER = [
+  { name: 'Temwa',  id: 'u_1777703945565_vflwa' },  // was "Mama"
+  { name: 'Storm',  id: 'u_1777706156599_wekb1' },  // was "CR7 Siuuuu"
+  { name: 'Jorg',   id: 'u_1778120805113_o2vyy' },  // was "The Amazing Papa" (72 picks)
+  { name: 'Mumba',  id: 'fam_mumba'  },
+  { name: 'Tezya',  id: 'fam_tezya'  },
+  { name: 'Lwande', id: 'fam_lwande' },
+  { name: 'Nimon',  id: 'fam_nimon'  },
+];
+
 // ══════════════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -2175,62 +2189,88 @@ function renderLoginPicker() {
   if (!wrap) return;
 
   const trusted = isFamilyTrusted();
-  const users   = rosterForPicker();
 
-  // Toggle the password field visibility
+  // Toggle the password field visibility (only needed first time on a device)
   if (pwGrp)   pwGrp.style.display   = trusted ? 'none' : '';
   if (badge)   badge.style.display   = trusted ? '' : 'none';
   if (untrust) untrust.style.display = trusted ? '' : 'none';
 
-  if (!users.length) { wrap.innerHTML = ''; return; }
-
   wrap.innerHTML = `
-    <div class="login-picker-label">Continue as</div>
+    <div class="login-picker-label">${trusted ? 'Tap your name to start' : 'Who are you?'}</div>
     <div class="login-picker-chips">
-      ${users.map(u => {
-        const nm   = String(u.name ?? '');
-        const nick = String(u.nickname || nm);
+      ${FAMILY_ROSTER.map(p => {
+        const photo = getProfilePhoto({ name: p.name });
+        const avatar = photo
+          ? `<span class="login-chip-avatar" style="padding:0;overflow:hidden"><img src="assets/${photo}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover"></span>`
+          : `<span class="login-chip-avatar" style="background:#7DC242">${esc(p.name.slice(0,1).toUpperCase())}</span>`;
         return `
-        <button type="button" class="login-chip" data-name="${esc(nm)}">
-          <span class="login-chip-avatar" style="background:${u.color || '#7DC242'}">${(nick || nm).slice(0,1).toUpperCase()}</span>
-          <span class="login-chip-text">
-            <span class="login-chip-nick">${esc(nick)}</span>
-            <span class="login-chip-name">${esc(nm)}</span>
-          </span>
+        <button type="button" class="login-chip" data-name="${esc(p.name)}">
+          ${avatar}
+          <span class="login-chip-text"><span class="login-chip-nick">${esc(p.name)}</span></span>
         </button>`;
       }).join('')}
     </div>
-    <div class="login-picker-divider"><span>or sign in below</span></div>
   `;
 
   wrap.querySelectorAll('.login-chip').forEach(chip => {
-    chip.addEventListener('click', () => pickKnownUser(chip.dataset.name));
+    chip.addEventListener('click', () => selectRosterPlayer(chip.dataset.name));
   });
 }
 
-function pickKnownUser(name) {
-  // Resolve from the server roster first (works on any device), then local cache
-  const su = findServerUserByName(name);
-  const u  = su || lookupUserByName(name) || { nickname: '', color: '#7DC242' };
-  const nameEl = document.getElementById('login-name');
-  const nickEl = document.getElementById('login-nickname');
-  if (nameEl) nameEl.value = name;
-  if (nickEl) nickEl.value = u.nickname || name;   // fall back to name so login isn't blocked
-  const dot = document.querySelector(`.color-dot[data-color="${u.color}"]`);
-  document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
-  dot?.classList.add('selected');
+// Tap a name. If the device is already trusted, log straight in; otherwise
+// stage the pick and ask for the family password once.
+function selectRosterPlayer(name) {
+  const entry = FAMILY_ROSTER.find(p => normalizeName(p.name) === normalizeName(name));
+  if (!entry) return;
+  S.pendingPick = entry;
+  document.querySelectorAll('.login-chip').forEach(c =>
+    c.classList.toggle('selected', normalizeName(c.dataset.name) === normalizeName(name)));
 
   if (isFamilyTrusted()) {
-    registerUser();
+    completeRosterLogin();
   } else {
+    const btn = document.getElementById('login-btn');
+    if (btn) btn.textContent = `Continue as ${entry.name} ⚽`;
     document.getElementById('login-family-pw')?.focus();
   }
+}
+
+function completeRosterLogin() {
+  const entry = S.pendingPick;
+  if (!entry) { showToast('Tap your name first', 'error'); return; }
+
+  if (!isFamilyTrusted()) {
+    const pwEl = document.getElementById('login-family-pw');
+    if (pwEl?.value !== CONFIG.FAMILY_PASSWORD) {
+      pwEl?.focus();
+      showToast('Wrong family password', 'error');
+      return;
+    }
+    markFamilyTrusted();
+  }
+
+  S.user = {
+    id:       entry.id,
+    name:     entry.name,
+    nickname: lookupNickname(entry.id) || '',   // optional fun nickname, set later from the menu
+    color:    '#7DC242',
+    email:    '',
+  };
+  persistNickname(entry.id, S.user.nickname);
+  persistUserByName(entry.name, S.user);
+  saveLocal();
+  S.pendingPick = null;
+  closeModal();
+  updateHeaderUser();
+  if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
+  syncRemote();
+  renderActiveView();
+  showToast(`Welcome, ${displayName(S.user)}! ⚽`, 'success');
 }
 
 function openModal() {
   document.getElementById('modal-overlay').classList.add('open');
   renderLoginPicker();
-  document.getElementById('login-name')?.focus();
 }
 
 function closeModal() {
@@ -2257,27 +2297,12 @@ function closeUserMenuOnOutside(e) {
 }
 
 function bindModal() {
-  // Family manual login
-  const btn  = document.getElementById('login-btn');
-  const name = document.getElementById('login-name');
-  const nick = document.getElementById('login-nickname');
-  const pw   = document.getElementById('login-family-pw');
+  // Tap-to-pick roster login
+  const btn = document.getElementById('login-btn');
+  const pw  = document.getElementById('login-family-pw');
 
-  // Pre-fill nickname + color when a returning user types their name
-  name?.addEventListener('input', () => {
-    const existing = lookupUserByName(name.value.trim());
-    if (existing) {
-      nick.value = existing.nickname || '';
-      const dot = document.querySelector(`.color-dot[data-color="${existing.color}"]`);
-      document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
-      dot?.classList.add('selected');
-    }
-  });
-
-  btn?.addEventListener('click', registerUser);
-  [name, nick, pw].forEach(el => el?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') registerUser();
-  }));
+  btn?.addEventListener('click', completeRosterLogin);
+  pw?.addEventListener('keydown', e => { if (e.key === 'Enter') completeRosterLogin(); });
 
   // "Use a different family password" — clears trust flag and re-renders picker
   document.getElementById('login-untrust-btn')?.addEventListener('click', () => {
