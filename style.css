@@ -1844,8 +1844,10 @@ html[data-theme="light"] .standings-table td { color: #14201a; }
   text-align: center;
 }
 
-.admin-gate h2 { font-size: 20px; color: var(--text); margin-bottom: 8px; }
-.admin-gate p  { color: var(--text-sub); margin-bottom: 24px; }
+/* The gate sits on the green page background (no card), so keep its text dark
+   in both themes — var(--text) would be white-on-green in dark mode. */
+.admin-gate h2 { font-size: 20px; color: #14201a; margin-bottom: 8px; }
+.admin-gate p  { color: rgba(20, 32, 26, 0.78); margin-bottom: 24px; }
 
 /* ── STAT PILLS ── */
 .stat-row {
