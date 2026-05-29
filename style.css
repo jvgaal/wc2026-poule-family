@@ -334,7 +334,7 @@ html[data-theme="dark"] .score-sep   { color: rgba(255,255,255,0.6); }
 
 /* Knockout bracket — on lighter green body bg → dark text */
 html[data-theme="dark"] .bkt-col-name   { color: #14201a; }
-html[data-theme="dark"] .bkt-col-pts    { color: #14201a; }
+html[data-theme="dark"] .bkt-col-pts    { background: rgba(125,194,66,0.25); color: #14201a; }
 html[data-theme="dark"] .bkt-toolbar    { color: #14201a; }
 html[data-theme="dark"] .bkt-hint       { color: rgba(20,32,26,0.65); }
 html[data-theme="dark"] .bkt-center-lbl { color: #14201a; }
@@ -1034,17 +1034,21 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
 }
 
 .bkt-col-name {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   color: var(--text-sub);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
 }
 
 .bkt-col-pts {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(125,194,66,0.2);
+  color: #14201a;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(125,194,66,0.4);
 }
 
 /* Center column: Final + 3rd */
