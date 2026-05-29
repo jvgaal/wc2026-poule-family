@@ -172,24 +172,17 @@ function findServerUserByName(name) {
 
 // Merge the local "known users" cache with the server roster (deduped by
 // normalised name) so the login picker shows everyone on every device. The
-// server entry wins for the id, since that's the canonical account.
+// Once the server roster has loaded it is the single source of truth, so a
+// deleted account (e.g. a removed test user) never reappears as a chip. Only
+// before the first successful fetch do we fall back to this device's local
+// cache, so a fresh page paint isn't empty.
 function rosterForPicker() {
-  const byKey = {};
-  listKnownUsers().forEach(u => {
-    const k = normalizeName(u.name);
-    if (k) byKey[k] = { name: u.name, id: u.id, nickname: u.nickname || '', color: u.color || '#7DC242' };
-  });
-  S.allUsers.forEach(u => {
-    const k = normalizeName(u.name);
-    if (!k) return;
-    byKey[k] = {
-      name: u.name,
-      id: u.id,
-      nickname: u.nickname || byKey[k]?.nickname || '',
-      color: u.color || byKey[k]?.color || '#7DC242',
-    };
-  });
-  return Object.values(byKey).filter(u => u.name);
+  if (S.rosterLoaded) {
+    return S.allUsers
+      .map(u => ({ name: u.name, id: u.id, nickname: u.nickname || '', color: u.color || '#7DC242' }))
+      .filter(u => u.name);
+  }
+  return listKnownUsers().filter(u => u.name);
 }
 
 function lookupNickname(userId) {
