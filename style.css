@@ -332,10 +332,13 @@ html[data-theme="dark"] .team-name   { color: #ffffff; }
 html[data-theme="dark"] .score-num   { color: #ffffff; }
 html[data-theme="dark"] .score-sep   { color: rgba(255,255,255,0.6); }
 
-/* Knockout bracket — on dark green body bg → light text (already using var(--text-sub) = #e8e8e8) */
-/* Toolbar (green body bg) → dark text */
-html[data-theme="dark"] .bkt-toolbar { color: #14201a; }
-html[data-theme="dark"] .bkt-hint    { color: rgba(20,32,26,0.65); }
+/* Knockout bracket — on lighter green body bg → dark text */
+html[data-theme="dark"] .bkt-col-name   { color: #14201a; }
+html[data-theme="dark"] .bkt-col-pts    { color: #14201a; }
+html[data-theme="dark"] .bkt-toolbar    { color: #14201a; }
+html[data-theme="dark"] .bkt-hint       { color: rgba(20,32,26,0.65); }
+html[data-theme="dark"] .bkt-center-lbl { color: #14201a; }
+html[data-theme="dark"] .btn-ghost       { color: #14201a; border-color: rgba(20,32,26,0.4); }
 html[data-theme="dark"] .empty-state h3 { color: var(--text); }
 html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
 
