@@ -235,6 +235,7 @@ async function fetchRemote() {
     if (data.error) throw new Error(data.error);
 
     S.backendOk      = true;
+    S.rosterLoaded   = true;   // server roster is now available for name→id matching
     S.allUsers       = data.users        || [];
     S.allPredictions = data.predictions  || {};
     S.results        = data.results      || {};
@@ -1674,19 +1675,34 @@ function escapeHtml(s) {
 function renderAdminUsers() {
   const wrap = document.getElementById('admin-users-list');
   if (!wrap) return;
-  if (!S.allUsers.length) {
+
+  // Registered players (Users tab) + orphans: ids that have predictions but
+  // no Users row (deleted accounts, old duplicates, test rows). Orphans show
+  // as "Unknown" on the leaderboard, so list them here so they're deletable.
+  const registeredIds = new Set(S.allUsers.map(u => u.id));
+  const registered = S.allUsers.map(u => ({ id: u.id, name: u.name, orphan: false }));
+  const orphans = Object.keys(S.allPredictions)
+    .filter(id => !registeredIds.has(id))
+    .map(id => ({ id, name: '(no account — predictions only)', orphan: true }));
+  const all = [...registered, ...orphans];
+
+  if (!all.length) {
     wrap.innerHTML = '<p style="color:var(--text-sub);font-size:13px">No players yet.</p>';
     return;
   }
-  wrap.innerHTML = S.allUsers.map(u => {
+
+  wrap.innerHTML = all.map(u => {
     const safeName = escapeHtml(u.name || '(no name)');
+    const tag = u.orphan
+      ? ' <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);border:1px solid var(--red);border-radius:4px;padding:1px 5px;margin-left:6px">orphan</span>'
+      : '';
     return `
       <div class="admin-user-row">
         <div class="admin-user-info">
-          <div class="admin-user-name">${safeName}</div>
+          <div class="admin-user-name">${safeName}${tag}</div>
           <div class="admin-user-id">${escapeHtml(u.id)}</div>
         </div>
-        <button class="btn btn-ghost btn-sm admin-user-delete" data-uid="${escapeHtml(u.id)}" data-name="${safeName}">🗑️ Remove</button>
+        <button class="btn btn-ghost btn-sm admin-user-delete" data-uid="${escapeHtml(u.id)}" data-name="${escapeHtml(u.orphan ? u.id : (u.name || '(no name)'))}">🗑️ Remove</button>
       </div>
     `;
   }).join('');
@@ -1710,6 +1726,7 @@ async function deleteUserAdmin(id, name) {
     S.allUsers = S.allUsers.filter(u => u.id !== id);
     delete S.allPredictions[id];
     renderAdminUsers();
+    renderLeaderboard();   // drop the removed row from the standings immediately
     showToast(`Removed ${name}`, 'success');
   } catch (e) {
     showToast(`Delete failed: ${e.message}`, 'error');
@@ -2284,7 +2301,7 @@ function bindModal() {
   });
 }
 
-function registerUser() {
+async function registerUser() {
   const nameEl     = document.getElementById('login-name');
   const nickEl     = document.getElementById('login-nickname');
   const pwEl       = document.getElementById('login-family-pw');
@@ -2305,6 +2322,13 @@ function registerUser() {
 
   const selectedDot = document.querySelector('.color-dot.selected');
   const color = selectedDot?.dataset.color || '#7DC242';
+
+  // Make sure the server roster is loaded before resolving identity, so a fast
+  // tap on a fresh device can't miss the match and fork a duplicate account.
+  if (isBackendConfigured() && !S.rosterLoaded) {
+    showToast('Connecting…', 'info');
+    await fetchRemote();
+  }
 
   // Returning user? Match by name — first the server roster (authoritative,
   // works across devices), then this device's local cache. Reusing the id
