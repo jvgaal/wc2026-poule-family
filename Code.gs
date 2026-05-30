@@ -3,7 +3,7 @@
 //  Deploy as: Execute as Me · Access: Anyone
 // ═══════════════════════════════════════════════════════
 
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';  // ← paste your Sheet ID
+const SPREADSHEET_ID = '1FWn17UQzWmaNH3VGcU-0NLMJ2rf7lVGhb8xcPqKTjg8';
 
 // Password stored in Script Properties — configure interval below
 // Key: ADMIN_PW   Value: <your password>

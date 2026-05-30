@@ -19,16 +19,15 @@ const MAX_POSSIBLE = 341; // 144 group + 157 knockout + 40 bonus
 
 // Fixed family roster — tap-to-pick login. Each player has a STABLE id, so the
 // same person is the same account on every device (no typing, no duplicates).
-// The first three ids are pre-existing accounts whose predictions we preserve;
-// the rest get deterministic ids. Names match the assets/<Name> profile photos.
+// Names match the assets/<Name> profile photos.
 const FAMILY_ROSTER = [
-  { name: 'Temwa',  id: 'u_1777703945565_vflwa' },  // was "Mama"
-  { name: 'Storm',  id: 'u_1777706156599_wekb1' },  // was "CR7 Siuuuu"
-  { name: 'Jorg',   id: 'u_1778120805113_o2vyy' },  // was "The Amazing Papa" (72 picks)
-  { name: 'Mumba',  id: 'fam_mumba'  },
-  { name: 'Tezya',  id: 'fam_tezya'  },
+  { name: 'Jorg',   id: 'u_1778120805113_o2vyy' }, // unchanged — has existing predictions
   { name: 'Lwande', id: 'fam_lwande' },
+  { name: 'Mumba',  id: 'fam_mumba'  },
   { name: 'Nimon',  id: 'fam_nimon'  },
+  { name: 'Storm',  id: 'fam_storm'  },
+  { name: 'Temwa',  id: 'fam_temwa'  },
+  { name: 'Tezya',  id: 'fam_tezya'  },
 ];
 
 // ══════════════════════════════════════════════════════
@@ -256,10 +255,15 @@ async function fetchRemote() {
     const sub = document.getElementById('modal-player-count');
     if (sub) sub.textContent = `Family poule · ${count} ${count === 1 ? 'player' : 'players'}`;
 
-    // Merge: our local predictions might be newer than server
+    // Merge: reconcile this device's local picks with the server row.
     if (S.user) {
       const server = S.allPredictions[S.user.id] || {};
-      // keep local if server has nothing for us yet
+      // Hydrate FROM server when this device has nothing yet (new device or
+      // cleared cache) — prevents showing blanks and overwriting good data.
+      if (server.group && Object.keys(S.predictions).length === 0)      S.predictions      = server.group;
+      if (server.bonus && Object.keys(S.bonusPredictions).length === 0) S.bonusPredictions = server.bonus;
+      if (server.ko    && Object.keys(S.koPredictions).length === 0)    S.koPredictions    = server.ko;
+      // Keep local if the server has nothing for us yet (local is the only copy).
       if (!server.group) server.group = S.predictions;
       if (!server.bonus) server.bonus = S.bonusPredictions;
       if (!server.ko)    server.ko    = S.koPredictions;

@@ -1,5 +1,8 @@
 // data.js — 2026 FIFA World Cup Tournament Data
 
+// ISO 3166-1 alpha-2 flag image URLs (flagcdn.com)
+const FLAG = (code) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+
 const WC = {
   name: "FIFA World Cup 2026",
   host: "USA · Canada · Mexico",
@@ -9,65 +12,65 @@ const WC = {
 
   teams: {
     // Group A
-    MEX: { name: "Mexico",              flag: "🇲🇽" },
-    RSA: { name: "South Africa",        flag: "🇿🇦" },
-    KOR: { name: "Korea Republic",      flag: "🇰🇷" },
-    CZE: { name: "Czechia",             flag: "🇨🇿" },
+    MEX: { name: "Mexico",              flag: FLAG('mx') },
+    RSA: { name: "South Africa",        flag: FLAG('za') },
+    KOR: { name: "Korea Republic",      flag: FLAG('kr') },
+    CZE: { name: "Czechia",             flag: FLAG('cz') },
     // Group B
-    CAN: { name: "Canada",              flag: "🇨🇦" },
-    SUI: { name: "Switzerland",         flag: "🇨🇭" },
-    QAT: { name: "Qatar",               flag: "🇶🇦" },
-    BIH: { name: "Bosnia & Herz.",      flag: "🇧🇦" },
+    CAN: { name: "Canada",              flag: FLAG('ca') },
+    SUI: { name: "Switzerland",         flag: FLAG('ch') },
+    QAT: { name: "Qatar",               flag: FLAG('qa') },
+    BIH: { name: "Bosnia & Herz.",      flag: FLAG('ba') },
     // Group C
-    BRA: { name: "Brazil",              flag: "🇧🇷" },
-    MAR: { name: "Morocco",             flag: "🇲🇦" },
-    HAI: { name: "Haiti",               flag: "🇭🇹" },
-    SCO: { name: "Scotland",            flag: "🏴󠁧󠁢󠁳󠁣󠁴󠁿" },
+    BRA: { name: "Brazil",              flag: FLAG('br') },
+    MAR: { name: "Morocco",             flag: FLAG('ma') },
+    HAI: { name: "Haiti",               flag: FLAG('ht') },
+    SCO: { name: "Scotland",            flag: FLAG('gb') },  // no Scotland-specific on flagcdn
     // Group D
-    USA: { name: "USA",                 flag: "🇺🇸" },
-    PAR: { name: "Paraguay",            flag: "🇵🇾" },
-    AUS: { name: "Australia",           flag: "🇦🇺" },
-    TUR: { name: "Türkiye",             flag: "🇹🇷" },
+    USA: { name: "USA",                 flag: FLAG('us') },
+    PAR: { name: "Paraguay",            flag: FLAG('py') },
+    AUS: { name: "Australia",           flag: FLAG('au') },
+    TUR: { name: "Türkiye",             flag: FLAG('tr') },
     // Group E
-    GER: { name: "Germany",             flag: "🇩🇪" },
-    CUW: { name: "Curaçao",             flag: "🇨🇼" },
-    CIV: { name: "Côte d'Ivoire",       flag: "🇨🇮" },
-    ECU: { name: "Ecuador",             flag: "🇪🇨" },
+    GER: { name: "Germany",             flag: FLAG('de') },
+    CUW: { name: "Curaçao",             flag: FLAG('cw') },
+    CIV: { name: "Côte d'Ivoire",       flag: FLAG('ci') },
+    ECU: { name: "Ecuador",             flag: FLAG('ec') },
     // Group F
-    NED: { name: "Netherlands",         flag: "🇳🇱" },
-    JPN: { name: "Japan",               flag: "🇯🇵" },
-    TUN: { name: "Tunisia",             flag: "🇹🇳" },
-    SWE: { name: "Sweden",              flag: "🇸🇪" },
+    NED: { name: "Netherlands",         flag: FLAG('nl') },
+    JPN: { name: "Japan",               flag: FLAG('jp') },
+    TUN: { name: "Tunisia",             flag: FLAG('tn') },
+    SWE: { name: "Sweden",               flag: FLAG('se') },
     // Group G
-    BEL: { name: "Belgium",             flag: "🇧🇪" },
-    EGY: { name: "Egypt",               flag: "🇪🇬" },
-    IRN: { name: "Iran",                flag: "🇮🇷" },
-    NZL: { name: "New Zealand",         flag: "🇳🇿" },
+    BEL: { name: "Belgium",             flag: FLAG('be') },
+    EGY: { name: "Egypt",               flag: FLAG('eg') },
+    IRN: { name: "Iran",                flag: FLAG('ir') },
+    NZL: { name: "New Zealand",         flag: FLAG('nz') },
     // Group H
-    ESP: { name: "Spain",               flag: "🇪🇸" },
-    CPV: { name: "Cabo Verde",          flag: "🇨🇻" },
-    KSA: { name: "Saudi Arabia",        flag: "🇸🇦" },
-    URU: { name: "Uruguay",             flag: "🇺🇾" },
+    ESP: { name: "Spain",               flag: FLAG('es') },
+    CPV: { name: "Cabo Verde",           flag: FLAG('cv') },
+    KSA: { name: "Saudi Arabia",        flag: FLAG('sa') },
+    URU: { name: "Uruguay",             flag: FLAG('uy') },
     // Group I
-    FRA: { name: "France",              flag: "🇫🇷" },
-    SEN: { name: "Senegal",             flag: "🇸🇳" },
-    NOR: { name: "Norway",              flag: "🇳🇴" },
-    IRQ: { name: "Iraq",                flag: "🇮🇶" },
+    FRA: { name: "France",              flag: FLAG('fr') },
+    SEN: { name: "Senegal",             flag: FLAG('sn') },
+    NOR: { name: "Norway",              flag: FLAG('no') },
+    IRQ: { name: "Iraq",                flag: FLAG('iq') },
     // Group J
-    ARG: { name: "Argentina",           flag: "🇦🇷" },
-    ALG: { name: "Algeria",             flag: "🇩🇿" },
-    AUT: { name: "Austria",             flag: "🇦🇹" },
-    JOR: { name: "Jordan",              flag: "🇯🇴" },
+    ARG: { name: "Argentina",           flag: FLAG('ar') },
+    ALG: { name: "Algeria",             flag: FLAG('dz') },
+    AUT: { name: "Austria",             flag: FLAG('at') },
+    JOR: { name: "Jordan",              flag: FLAG('jo') },
     // Group K
-    POR: { name: "Portugal",            flag: "🇵🇹" },
-    UZB: { name: "Uzbekistan",          flag: "🇺🇿" },
-    COL: { name: "Colombia",            flag: "🇨🇴" },
-    COD: { name: "Congo DR",            flag: "🇨🇩" },
+    POR: { name: "Portugal",            flag: FLAG('pt') },
+    UZB: { name: "Uzbekistan",          flag: FLAG('uz') },
+    COL: { name: "Colombia",            flag: FLAG('co') },
+    COD: { name: "Congo DR",            flag: FLAG('cd') },
     // Group L
-    ENG: { name: "England",             flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
-    CRO: { name: "Croatia",             flag: "🇭🇷" },
-    GHA: { name: "Ghana",               flag: "🇬🇭" },
-    PAN: { name: "Panama",              flag: "🇵🇦" },
+    ENG: { name: "England",             flag: FLAG('gb') },  // no England-specific on flagcdn
+    CRO: { name: "Croatia",             flag: FLAG('hr') },
+    GHA: { name: "Ghana",               flag: FLAG('gh') },
+    PAN: { name: "Panama",               flag: FLAG('pa') },
   },
 
   groups: [
