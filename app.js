@@ -17,6 +17,11 @@ const CONFIG = {
 
 const MAX_POSSIBLE = 341; // 144 group + 157 knockout + 40 bonus
 
+// Renders a team's flag as an <img> (team.flag is a flagcdn URL).
+// NOTE: cannot be used inside <option> elements — they only render text.
+const flagImg = (team, cls = 'flag-inline') =>
+  team ? `<img class="${cls}" src="${team.flag}" alt="" loading="lazy">` : '';
+
 // Fixed family roster — tap-to-pick login. Each player has a STABLE id, so the
 // same person is the same account on every device (no typing, no duplicates).
 // Names match the assets/<Name> profile photos.
@@ -918,7 +923,7 @@ function matchCard(m, locked) {
     <div class="match-label">Group ${m.group} · Round ${m.round}</div>
     <div class="match-row">
       <div class="team-side">
-        <div class="team-flag">${home.flag}</div>
+        ${flagImg(home, 'team-flag')}
         <div class="team-name ${homeCls}">${home.name}</div>
       </div>
 
@@ -937,7 +942,7 @@ function matchCard(m, locked) {
       </div>
 
       <div class="team-side">
-        <div class="team-flag">${away.flag}</div>
+        ${flagImg(away, 'team-flag')}
         <div class="team-name ${awayCls}">${away.name}</div>
       </div>
     </div>
@@ -989,7 +994,7 @@ function renderStandingsTable(standings, groupId) {
     const qualCls = i < 2 ? 'qualifies' : i === 2 ? 'qualifies-3rd' : '';
     return `
     <tr class="${qualCls}">
-      <td><div class="std-team"><span>${team.flag}</span><span>${team.name}</span></div></td>
+      <td><div class="std-team">${flagImg(team, 'std-flag')}<span>${team.name}</span></div></td>
       <td>${t.mp}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td>
       <td>${t.gf}</td><td>${t.ga}</td><td>${gd >= 0 ? '+' : ''}${gd}</td>
       <td class="std-pts">${t.pts}</td>
@@ -999,7 +1004,7 @@ function renderStandingsTable(standings, groupId) {
   return `
   <div class="standings-card" style="margin-top:20px">
     <div class="standings-title">📊 Predicted Standings — Group ${groupId}
-      <span style="float:right;font-weight:400;color:rgba(20,32,26,0.55)">
+      <span style="float:right;font-weight:400;color:var(--text-dim)">
         <span style="color:var(--green)">■</span> Advance  <span style="color:var(--yellow)">■</span> Possible 3rd
       </span>
     </div>
@@ -1264,7 +1269,7 @@ function bktCard(roundId, idx, hasSelects, locked) {
               .map(code => {
                 const team = WC.teams[code];
                 const selected = slot[side] === code ? ' selected' : '';
-                return `<option value="${code}"${selected}>${team.flag} ${team.name}</option>`;
+                return `<option value="${code}"${selected}>${team.name}</option>`;
               })
               .join('');
           }
@@ -1275,7 +1280,7 @@ function bktCard(roundId, idx, hasSelects, locked) {
         })()
       : `<div class="bkt-slot${team ? ' filled' : ''}${isWinner ? ' winner' : ''}">
            ${team
-             ? `<span class="bkt-flag">${team.flag}</span><span class="bkt-tname">${team.name}</span>`
+             ? `${flagImg(team, 'bkt-flag')}<span class="bkt-tname">${team.name}</span>`
              : `<span class="bkt-tbd">TBD</span>`}
          </div>`;
     return `<div class="bkt-team-line">${teamCell}${scoreInput(side === 'home' ? 'hScore' : 'aScore')}</div>`;
@@ -1286,12 +1291,12 @@ function bktCard(roundId, idx, hasSelects, locked) {
     <div class="bkt-winner-row">
       <button class="bkt-flag-btn${hw ? ' chosen' : ''}" title="${h.name} advances"
               onclick="quickPickWinner('${roundId}',${idx},'${slot.home}')">
-        ${h.flag}
+        ${flagImg(h, 'bkt-btn-flag')}
       </button>
       <span class="bkt-adv">${isDraw ? 'on pens →' : 'advances'}</span>
       <button class="bkt-flag-btn${aw ? ' chosen' : ''}" title="${a.name} advances"
               onclick="quickPickWinner('${roundId}',${idx},'${slot.away}')">
-        ${a.flag}
+        ${flagImg(a, 'bkt-btn-flag')}
       </button>
     </div>` : '';
 
@@ -1439,7 +1444,7 @@ function bonusCard(q) {
   if (q.type === 'team') {
     input = `<select class="bonus-input" data-qid="${q.id}">
       <option value="">— Select team —</option>
-      ${WC.teamList.map(t => `<option value="${t.code}" ${val === t.code ? 'selected' : ''}>${t.flag} ${t.name}</option>`).join('')}
+      ${WC.teamList.map(t => `<option value="${t.code}" ${val === t.code ? 'selected' : ''}>${t.name}</option>`).join('')}
     </select>`;
   } else if (q.type === 'player') {
     input = `<input class="bonus-input" type="text" data-qid="${q.id}"
@@ -1551,7 +1556,7 @@ function viewUserPredictions(userId) {
       }
       return `
       <tr>
-        <td>${home.flag} ${home.name} vs ${away.flag} ${away.name}</td>
+        <td>${flagImg(home)} ${home.name} vs ${flagImg(away)} ${away.name}</td>
         <td><span class="pred-score ${cls}">${predTxt}</span></td>
         <td style="color:var(--text-sub)">${resTxt}</td>
         <td><span class="${cls}">${pts}</span></td>
@@ -1563,14 +1568,14 @@ function viewUserPredictions(userId) {
   const bonusRows = WC.bonusQuestions.map(q => {
     const p = bonus[q.id] || '—';
     const r = S.results[`bonus_${q.id}`];
-    let display = p;
+    let display = esc(p);
     if (q.type === 'team' && p !== '—') {
       const t = WC.teams[p];
-      display = t ? `${t.flag} ${t.name}` : p;
+      display = t ? `${flagImg(t)} ${esc(t.name)}` : esc(p);
     }
     return `<tr>
       <td>${q.emoji} ${q.question}</td>
-      <td><strong>${esc(display)}</strong></td>
+      <td><strong>${display}</strong></td>
       <td style="color:var(--text-sub)">${r || '—'}</td>
     </tr>`;
   }).join('');
@@ -1795,7 +1800,7 @@ function renderAdminResultGrid(groupId) {
     const home = WC.teams[m.home], away = WC.teams[m.away];
     return `
     <div class="result-entry-card">
-      <div class="result-entry-label">Group ${m.group} R${m.round} · ${home.flag} vs ${away.flag}</div>
+      <div class="result-entry-label">Group ${m.group} R${m.round} · ${flagImg(home)} vs ${flagImg(away)}</div>
       <div class="result-entry-row">
         <span>${home.name}</span>
         <input type="number" id="adm-${m.id}-home" value="${res.home ?? ''}" min="0" max="20"
@@ -1857,9 +1862,9 @@ function renderAdminKoResultGrid(roundId) {
       <div class="result-entry-row" style="margin-bottom:8px">
         <span>Match:</span>
         <span style="flex:1;text-align:center;font-weight:bold">
-          ${homeTeam ? homeTeam.flag + ' ' + homeTeam.name : 'TBD'}
+          ${homeTeam ? flagImg(homeTeam) + ' ' + homeTeam.name : 'TBD'}
           &nbsp;vs&nbsp;
-          ${awayTeam ? awayTeam.flag + ' ' + awayTeam.name : 'TBD'}
+          ${awayTeam ? flagImg(awayTeam) + ' ' + awayTeam.name : 'TBD'}
         </span>
       </div>
       <div class="result-entry-row">
@@ -1877,8 +1882,8 @@ function renderAdminKoResultGrid(roundId) {
         <select style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px"
                 onchange="saveKoResult('${roundId}',${i},this.value)">
           <option value="">— Auto / Draw —</option>
-          ${homeTeam ? `<option value="${mu.home}" ${winner === mu.home ? 'selected' : ''}>${homeTeam.flag} ${homeTeam.name}</option>` : ''}
-          ${awayTeam ? `<option value="${mu.away}" ${winner === mu.away ? 'selected' : ''}>${awayTeam.flag} ${awayTeam.name}</option>` : ''}
+          ${homeTeam ? `<option value="${mu.home}" ${winner === mu.home ? 'selected' : ''}>${homeTeam.name}</option>` : ''}
+          ${awayTeam ? `<option value="${mu.away}" ${winner === mu.away ? 'selected' : ''}>${awayTeam.name}</option>` : ''}
         </select>
       </div>
     </div>`;
@@ -2239,7 +2244,7 @@ function selectRosterPlayer(name) {
   }
 }
 
-function completeRosterLogin() {
+async function completeRosterLogin() {
   const entry = S.pendingPick;
   if (!entry) { showToast('Tap your name first', 'error'); return; }
 
@@ -2267,8 +2272,21 @@ function completeRosterLogin() {
   closeModal();
   updateHeaderUser();
   if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
-  syncRemote();
+
+  // Pull THIS account's saved predictions from the server BEFORE rendering or
+  // saving, so a fresh device (phone, cleared cache) shows the existing picks
+  // instead of blanks. fetchRemote() hydrates S.predictions when local is empty.
+  await fetchRemote();
   renderActiveView();
+
+  // Safe-sync: only write back once we actually have something to save — either
+  // hydrated from the server above or entered locally. NEVER push an all-empty
+  // payload, which would overwrite a populated account on the server.
+  const hasPicks = Object.keys(S.predictions).length
+                || Object.keys(S.koPredictions).length
+                || Object.keys(S.bonusPredictions).length;
+  if (hasPicks) syncRemote();
+
   showToast(`Welcome, ${displayName(S.user)}! ⚽`, 'success');
 }
 
@@ -2449,7 +2467,7 @@ function getProfilePhoto(user) {
 function teamOptions(selected = '') {
   const none = `<option value="">— Select team —</option>`;
   const opts = WC.teamList.map(t =>
-    `<option value="${t.code}" ${selected === t.code ? 'selected' : ''}>${t.flag} ${t.name}</option>`
+    `<option value="${t.code}" ${selected === t.code ? 'selected' : ''}>${t.name}</option>`
   ).join('');
   return none + opts;
 }
