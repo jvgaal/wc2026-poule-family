@@ -339,6 +339,8 @@ html[data-theme="dark"] .bkt-toolbar    { color: #14201a; }
 html[data-theme="dark"] .bkt-hint       { color: rgba(20,32,26,0.65); }
 html[data-theme="dark"] .bkt-center-lbl { color: #14201a; }
 html[data-theme="dark"] .btn-ghost       { color: #14201a; border-color: rgba(20,32,26,0.4); }
+/* …but the thirds panel is a dark card, so keep its button text light */
+html[data-theme="dark"] .tp-panel .btn-ghost { color: var(--text-sub); border-color: rgba(255,255,255,0.3); }
 html[data-theme="dark"] .empty-state h3 { color: var(--text); }
 html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
 
@@ -1207,6 +1209,88 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
 .bkt-flag  { width: 28px; height: 20px; object-fit: contain; flex-shrink: 0; }
 .bkt-tname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bkt-tbd   { color: var(--text-dim); font-style: italic; font-size: 13px; }
+
+/* Auto-placed 3rd-place qualifier slots */
+.bkt-slot.bkt-third { border-style: dashed; border-color: var(--border-hi); }
+.bkt-third-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  color: #14201a;
+  background: var(--yellow);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+/* ── 3rd-PLACE QUALIFIERS PANEL ── */
+.tp-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.tp-panel-empty { color: var(--text-dim); }
+.tp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.tp-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.tp-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #14201a;
+  background: var(--green);
+  border-radius: 10px;
+  padding: 1px 8px;
+  margin-left: 4px;
+}
+.tp-sub { font-size: 12px; color: var(--text-dim); }
+.tp-reset { margin-left: auto; }
+.tp-note { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; max-width: 720px; }
+.tp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+.tp-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card2);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.tp-chip:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+.tp-chip.tp-in {
+  border-color: rgba(125,194,66,0.55);
+  background: rgba(125,194,66,0.12);
+}
+.tp-chip.tp-out { opacity: 0.62; }
+.tp-rank {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.tp-flag { width: 24px; height: 17px; object-fit: contain; flex-shrink: 0; }
+.tp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.tp-grp  { flex-shrink: 0; font-size: 11px; color: var(--text-dim); }
+.tp-pts  { flex-shrink: 0; font-size: 11px; color: var(--text-dim); }
+.tp-mark { flex-shrink: 0; width: 14px; text-align: center; color: var(--green); font-weight: 800; }
 
 /* Winner pick row */
 .bkt-winner-row {

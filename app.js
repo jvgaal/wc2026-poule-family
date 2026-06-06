@@ -15,7 +15,7 @@ const CONFIG = {
 };
 
 
-const MAX_POSSIBLE = 341; // 144 group + 157 knockout + 40 bonus
+const MAX_POSSIBLE = 357; // 144 group + 157 knockout + 16 thirds (8×2) + 40 bonus
 
 // Renders a team's flag as an <img> (team.flag is a flagcdn URL).
 // NOTE: cannot be used inside <option> elements — they only render text.
@@ -267,7 +267,7 @@ async function fetchRemote() {
       // cleared cache) — prevents showing blanks and overwriting good data.
       if (server.group && Object.keys(S.predictions).length === 0)      S.predictions      = server.group;
       if (server.bonus && Object.keys(S.bonusPredictions).length === 0) S.bonusPredictions = server.bonus;
-      if (server.ko    && Object.keys(S.koPredictions).length === 0)    S.koPredictions    = server.ko;
+      if (server.ko    && !WC.koRounds.some(r => S.koPredictions[r.id]))  S.koPredictions    = server.ko;
       // Keep local if the server has nothing for us yet (local is the only copy).
       if (!server.group) server.group = S.predictions;
       if (!server.bonus) server.bonus = S.bonusPredictions;
@@ -492,7 +492,7 @@ function calcScore(userId) {
   const bonus  = isSelf ? S.bonusPredictions : (S.allPredictions[userId]?.bonus || {});
   const ko     = isSelf ? S.koPredictions    : (S.allPredictions[userId]?.ko    || {});
 
-  let groupPts = 0, koPts = 0, bonusPts = 0;
+  let groupPts = 0, koPts = 0, bonusPts = 0, thirdsPts = 0;
 
   // Group stage
   WC.matches.forEach(m => {
@@ -525,6 +525,17 @@ function calcScore(userId) {
     });
   });
 
+  // 3rd-place qualifiers — points per team the user tipped to qualify as a
+  // best-third that actually did (team identity, order/slot independent).
+  if (WC.groups.every(g => groupResultsComplete(g.id))) {
+    const actual = new Set(rankThirds(calcGroupStandingsFromResults).slice(0, 8).map(t => t.code));
+    const eff = effectiveThirds(userId);
+    eff.qualifyingGroups.forEach(g => {
+      const code = eff.thirdsByGroup[g];
+      if (code && actual.has(code)) thirdsPts += WC.scoring.thirdQualifier;
+    });
+  }
+
   // Bonus questions
   WC.bonusQuestions.forEach(q => {
     const p = bonus[q.id];
@@ -543,7 +554,8 @@ function calcScore(userId) {
     }
   });
 
-  return { group: groupPts, ko: koPts, bonus: bonusPts, total: groupPts + koPts + bonusPts };
+  return { group: groupPts, ko: koPts, bonus: bonusPts, thirds: thirdsPts,
+           total: groupPts + koPts + bonusPts + thirdsPts };
 }
 
 function countFilled(userId) {
@@ -658,46 +670,28 @@ function resolveActualR32() {
     tops[g.id] = { first: s[0]?.code || '', second: s[1]?.code || '' };
   });
 
-  // Third-place ranking only makes sense once every group is complete.
+  // Third-place ranking + official allocation only make sense once every group
+  // is complete (we need all 12 thirds ranked to know which 8 qualify).
   const allComplete = WC.groups.every(g => groupResultsComplete(g.id));
-  let qualifiedThirdPlaces = [];
+  let thirdSlots = {};
   if (allComplete) {
-    const thirdPlaceData = WC.groups.map(g => {
-      const s = calcGroupStandingsFromResults(g.id);
-      return { group: g.id, code: s[2]?.code || '', pts: s[2]?.pts || 0,
-               gd: (s[2]?.gf || 0) - (s[2]?.ga || 0), gf: s[2]?.gf || 0 };
-    }).filter(t => t.code);
-    thirdPlaceData.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
-    qualifiedThirdPlaces = thirdPlaceData.slice(0, 8);
+    const ranked = rankThirds(calcGroupStandingsFromResults);
+    const thirdsByGroup = {};
+    ranked.forEach(t => { thirdsByGroup[t.group] = t.code; });
+    const qualifyingGroups = ranked.slice(0, 8).map(t => t.group);
+    thirdSlots = resolveThirdSlots(thirdsByGroup, qualifyingGroups);
   }
 
-  const usedThird = new Set();
-  const resolveSide = (side) => {
-    if (side.groups) {
-      if (!allComplete) return '';
-      for (const tp of qualifiedThirdPlaces) {
-        if (side.groups.includes(tp.group) && !usedThird.has(tp.code)) {
-          usedThird.add(tp.code);
-          return tp.code;
-        }
-      }
-      return '';
-    }
+  const resolveSide = (side, i) => {
+    if (side.groups) return thirdSlots[i] || '';
     const t = tops[side.group];
     if (!t) return '';
     return side.pos === 1 ? (t.first || '') : (t.second || '');
   };
 
-  // Resolve 3rd-place slots first (matches autoFillKo's global ordering)
-  const thirdResolved = {};
-  R32_PAIRINGS.forEach((pair, i) => {
-    if (pair.away.groups) thirdResolved[`${i}-away`] = resolveSide(pair.away);
-    if (pair.home.groups) thirdResolved[`${i}-home`] = resolveSide(pair.home);
-  });
-
   return R32_PAIRINGS.map((pair, i) => ({
-    home: pair.home.groups ? (thirdResolved[`${i}-home`] || '') : resolveSide(pair.home),
-    away: pair.away.groups ? (thirdResolved[`${i}-away`] || '') : resolveSide(pair.away),
+    home: resolveSide(pair.home, i),
+    away: resolveSide(pair.away, i),
   }));
 }
 
@@ -809,7 +803,7 @@ function renderLeaderboard() {
         ${avatarHtml(u, 42)}
         <div>
           <div class="lb-name">${esc(displayName(u))}${isMe ? ' <span style="font-size:11px;color:var(--green)">(you)</span>' : ''}</div>
-          <div class="lb-sub">${u.score.group}G · ${u.score.ko}K · ${u.score.bonus}B pts</div>
+          <div class="lb-sub">${u.score.group}G · ${u.score.ko}K · ${u.score.thirds || 0}³ · ${u.score.bonus}B pts</div>
         </div>
       </div>
       <div>
@@ -1038,6 +1032,7 @@ function renderKnockout() {
 }
 
 function cascadeWinners() {
+  applyThirdSlots();   // auto-place the 8 qualifying thirds before propagating winners
   const get = (r, i) => S.koPredictions[r]?.[i] || {home:'',away:'',winner:''};
   const setSlot = (r, i, h, a) => {
     const rnd = WC.koRounds.find(x => x.id === r);
@@ -1076,6 +1071,7 @@ function renderBracket() {
       <button class="btn btn-ghost btn-sm" onclick="autoFillKo()">⚡ Auto-fill R32 from groups</button>
       <span class="bkt-hint">Pick winners — they cascade through the bracket automatically</span>
     </div>
+    ${renderThirdsPanel()}
     <div class="bkt-scroll">
       <div class="bkt-tree">
         ${col('r32', 0,  8,  true)}
@@ -1110,8 +1106,84 @@ function renderBracket() {
     });
   });
 
+  // Bind 3rd-place qualifier chips
+  document.getElementById('ko-content').querySelectorAll('.tp-chip[data-group]').forEach(chip => {
+    chip.addEventListener('click', () => toggleThirdPick(chip.dataset.group));
+  });
+
   // Auto-scale to fit viewport (no scrollbar)
   fitBracket();
+}
+
+// Panel listing the 12 third-placed teams ranked from the player's group
+// predictions. The best 8 qualify by default (auto); the player can swap which
+// groups qualify. The chosen set drives the bracket's 3rd-place slots.
+function renderThirdsPanel() {
+  if (!S.user) return '';
+  const { ranked, qualifyingGroups, auto } = effectiveThirds(S.user.id);
+  if (ranked.length < 12) {
+    return `<div class="tp-panel tp-panel-empty">
+      <div class="tp-head"><span class="tp-title">🥉 3rd-place qualifiers</span></div>
+      <div class="tp-note">Fill in all 12 group tables to rank the third-placed teams. The best 8 qualify automatically.</div>
+    </div>`;
+  }
+  const qSet = new Set(qualifyingGroups);
+  const overridden = !!getThirdOverride(S.user.id);
+  const sameAsAuto = JSON.stringify([...qSet].sort()) === JSON.stringify([...auto].sort());
+
+  const rows = ranked.map((t, i) => {
+    const team = WC.teams[t.code];
+    const inQ = qSet.has(t.group);
+    return `<button type="button" class="tp-chip${inQ ? ' tp-in' : ' tp-out'}" data-group="${t.group}"
+              title="${inQ ? 'Qualifies — click to drop' : 'Out — click to qualify'}">
+        <span class="tp-rank">${i + 1}</span>
+        ${flagImg(team, 'tp-flag')}
+        <span class="tp-name">${team.name}</span>
+        <span class="tp-grp">Grp ${t.group}</span>
+        <span class="tp-pts">${t.pts}p · ${t.gd >= 0 ? '+' : ''}${t.gd}</span>
+        <span class="tp-mark">${inQ ? '✓' : ''}</span>
+      </button>`;
+  }).join('');
+
+  return `<div class="tp-panel">
+    <div class="tp-head">
+      <span class="tp-title">🥉 3rd-place qualifiers <span class="tp-count">${qSet.size}/8</span></span>
+      <span class="tp-sub">${overridden && !sameAsAuto ? 'Custom picks' : 'Auto from your group tables'}</span>
+      ${overridden ? `<button class="btn btn-ghost btn-sm tp-reset" onclick="resetThirdPicks()">↺ Reset to auto</button>` : ''}
+    </div>
+    <div class="tp-note">The 8 best third-placed teams reach the Round of 32. Click a team to swap it in or out — they're placed into the bracket automatically (official FIFA rules).</div>
+    <div class="tp-grid">${rows}</div>
+  </div>`;
+}
+
+// Toggle a group's 3rd-placed team in/out of the qualifying 8, keeping exactly 8
+// by swapping with the nearest-ranked team on the other side.
+function toggleThirdPick(group) {
+  const { ranked, qualifyingGroups } = effectiveThirds(S.user.id);
+  const order = ranked.map(t => t.group);                 // best → worst
+  const cur = new Set(qualifyingGroups);
+  if (cur.has(group)) {
+    // Drop this team; promote the highest-ranked team currently out.
+    const promote = order.find(g => !cur.has(g));
+    if (!promote) return;
+    cur.delete(group); cur.add(promote);
+  } else {
+    // Add this team; demote the lowest-ranked team currently in.
+    const demote = [...order].reverse().find(g => cur.has(g));
+    if (!demote) return;
+    cur.add(group); cur.delete(demote);
+  }
+  setThirdOverride([...cur]);
+  cascadeWinners();   // re-place thirds in the bracket
+  debouncedSave();
+  renderBracket();
+}
+
+function resetThirdPicks() {
+  setThirdOverride(null);
+  cascadeWinners();
+  debouncedSave();
+  renderBracket();
 }
 
 function fitBracket() {
@@ -1219,6 +1291,132 @@ function getQualifierGroupsForR32(matchIdx) {
   return R32_PAIRINGS[matchIdx] || null;
 }
 
+// ══════════════════════════════════════════════════════
+//  THIRD-PLACE QUALIFIER LOGIC
+//  The 8 best 3rd-placed teams are derived (not hand-placed); the official
+//  FIFA allocation table (THIRD_PLACE_ALLOCATION in data.js) decides which
+//  qualifying third faces which group winner. Players only pick winners.
+// ══════════════════════════════════════════════════════
+
+// For each R32 pairing index that has a 3rd-place slot, record the first-place
+// seed group it's tied to (the side opposite the {groups} side) and that slot's
+// candidate groups. Derived from R32_PAIRINGS so the two never drift.
+const THIRD_SLOT_SEED = {};        // pairingIndex -> seed group letter
+const THIRD_SLOT_CANDIDATES = {};  // seed group letter -> [candidate groups]
+R32_PAIRINGS.forEach((pair, i) => {
+  const tSide = pair.home.groups ? pair.home : (pair.away.groups ? pair.away : null);
+  const seedG = pair.home.groups ? pair.away.group : (pair.away.groups ? pair.home.group : null);
+  if (tSide && seedG) { THIRD_SLOT_SEED[i] = seedG; THIRD_SLOT_CANDIDATES[seedG] = tSide.groups; }
+});
+
+// Given the 8 groups whose 3rd-placed team qualifies, return seedGroup -> thirdGroup
+// using the official table. Falls back to a greedy match if a key is ever missing.
+function allocateThirds(qualifyingGroups) {
+  const key = [...qualifyingGroups].sort().join('');
+  const enc = (typeof THIRD_PLACE_ALLOCATION !== 'undefined') && THIRD_PLACE_ALLOCATION[key];
+  if (enc && enc.length === THIRD_PLACE_SEED_ORDER.length) {
+    const map = {};
+    THIRD_PLACE_SEED_ORDER.forEach((seed, i) => { map[seed] = enc[i]; });
+    return map;
+  }
+  if (qualifyingGroups.length === 8)
+    console.warn('[thirds] no allocation entry for', key, '— using greedy fallback');
+  return greedyAllocateThirds(qualifyingGroups);
+}
+
+function greedyAllocateThirds(qualifyingGroups) {
+  const seeds = [...new Set(Object.values(THIRD_SLOT_SEED))];
+  const qset = [...qualifyingGroups];
+  const result = {}; const used = new Set();
+  const solve = (i) => {
+    if (i === seeds.length) return true;
+    const seed = seeds[i];
+    for (const g of qset) {
+      if (used.has(g) || g === seed) continue;
+      if (!(THIRD_SLOT_CANDIDATES[seed] || []).includes(g)) continue;
+      used.add(g); result[seed] = g;
+      if (solve(i + 1)) return true;
+      used.delete(g); delete result[seed];
+    }
+    return false;
+  };
+  solve(0);
+  return result;
+}
+
+// Rank the 12 third-placed teams from a standings function (pts → GD → GF).
+function rankThirds(standingsFn) {
+  return WC.groups.map(g => {
+    const s = standingsFn(g.id);
+    return { group: g.id, code: s[2]?.code || '',
+             pts: s[2]?.pts || 0,
+             gd: (s[2]?.gf || 0) - (s[2]?.ga || 0),
+             gf: s[2]?.gf || 0 };
+  }).filter(t => t.code)
+    .sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf));
+}
+
+// teamCode per R32 third-slot index. thirdsByGroup: groupId -> 3rd-placed teamCode.
+function resolveThirdSlots(thirdsByGroup, qualifyingGroups) {
+  const seedToThird = allocateThirds(qualifyingGroups);
+  const out = {};
+  R32_PAIRINGS.forEach((pair, i) => {
+    const seed = THIRD_SLOT_SEED[i];
+    if (seed == null) return;
+    const tg = seedToThird[seed];
+    out[i] = tg ? (thirdsByGroup[tg] || '') : '';
+  });
+  return out;
+}
+
+// The override (array of 8 group letters) rides inside the ko blob (key _thirds)
+// so it persists and syncs for free; null/absent = auto (top-8 from group picks).
+function getThirdOverride(userId) {
+  const isSelf = S.user && userId === S.user.id;
+  const ko = isSelf ? S.koPredictions : (S.allPredictions[userId]?.ko || {});
+  const v = ko && ko._thirds;
+  return Array.isArray(v) && v.length === 8 ? v : null;
+}
+function setThirdOverride(groups) {
+  if (groups && groups.length === 8) S.koPredictions._thirds = [...groups].sort();
+  else delete S.koPredictions._thirds;
+}
+
+// Effective qualifying-third groups for a user: their valid override, else the
+// auto top-8 from their group-stage predictions. Also returns thirdsByGroup.
+function effectiveThirds(userId) {
+  const ranked = rankThirds(gid => calcGroupStandings(gid, userId));
+  const thirdsByGroup = {};
+  ranked.forEach(t => { thirdsByGroup[t.group] = t.code; });
+  const auto = ranked.slice(0, 8).map(t => t.group);
+  let qualifyingGroups = auto;
+  const ov = getThirdOverride(userId);
+  if (ov) {
+    const valid = ov.filter(g => thirdsByGroup[g]);
+    if (valid.length === 8) qualifyingGroups = valid;
+  }
+  return { ranked, thirdsByGroup, qualifyingGroups, auto };
+}
+
+// Write the auto-resolved 3rd-place teams into the current user's R32 slots
+// (read-only in the UI). Clears a stale winner if its team is replaced.
+function applyThirdSlots() {
+  if (!S.user || !S.koPredictions.r32) return;
+  const { thirdsByGroup, qualifyingGroups } = effectiveThirds(S.user.id);
+  const slots = resolveThirdSlots(thirdsByGroup, qualifyingGroups);
+  R32_PAIRINGS.forEach((pair, i) => {
+    const side = pair.home.groups ? 'home' : (pair.away.groups ? 'away' : null);
+    if (!side) return;
+    const slot = S.koPredictions.r32[i];
+    if (!slot) return;
+    const team = slots[i] || '';
+    if (slot[side] !== team) {
+      slot[side] = team;
+      if (slot.winner && slot.winner !== slot.home && slot.winner !== slot.away) slot.winner = '';
+    }
+  });
+}
+
 function bktCard(roundId, idx, hasSelects, locked) {
   const r    = WC.koRounds.find(x => x.id === roundId);
   const slot = S.koPredictions[roundId]?.[idx] || {home:'',away:'',winner:'',hScore:'',aScore:''};
@@ -1236,40 +1434,32 @@ function bktCard(roundId, idx, hasSelects, locked) {
               data-round="${roundId}" data-idx="${idx}" data-side="${side}"
               value="${slot[side] !== '' ? slot[side] : ''}" placeholder="–" inputmode="numeric" />`;
 
+  // Is this side an auto-filled 3rd-place slot? Those are read-only — the
+  // qualifying thirds are derived + placed via the official FIFA table.
+  const sideSpec = roundId === 'r32'
+    ? ((side, pair) => pair ? (side === 'home' ? pair.home : pair.away) : null)
+    : null;
+  const isThirdSide = (side) => {
+    if (roundId !== 'r32') return false;
+    const spec = sideSpec(side, getQualifierGroupsForR32(idx));
+    return !!(spec && spec.groups);
+  };
+
   const teamRow = (side, team, isWinner) => {
-    const teamCell = (hasSelects && !locked)
+    const thirdSlot = isThirdSide(side);
+    const editable = hasSelects && !locked && !thirdSlot;
+    const teamCell = editable
       ? (() => {
+          // R32 group-winner / runner-up slot: only that group's four teams.
           let options = teamOptions(slot[side]);
-          if (roundId === 'r32') {
-            const pair = getQualifierGroupsForR32(idx);
-            const sideSpec = pair ? (side === 'home' ? pair.home : pair.away) : null;
-            let teamCodes = [];
-            if (sideSpec) {
-              if (sideSpec.groups) {
-                // Third-place pool: union of teams from candidate groups,
-                // minus teams already picked as 1st/2nd in OTHER R32 matches.
-                teamCodes = WC.groups
-                  .filter(g => sideSpec.groups.includes(g.id))
-                  .flatMap(g => g.teams);
-                const r32 = S.koPredictions.r32 || [];
-                const pickedInNonThird = new Set();
-                R32_PAIRINGS.forEach((p, i) => {
-                  if (i === idx) return;
-                  if (p.home.groups || p.away.groups) return; // skip 3rd-place matches
-                  if (r32[i]?.home) pickedInNonThird.add(r32[i].home);
-                  if (r32[i]?.away) pickedInNonThird.add(r32[i].away);
-                });
-                teamCodes = teamCodes.filter(code => !pickedInNonThird.has(code));
-              } else {
-                const groupData = WC.groups.find(g => g.id === sideSpec.group);
-                teamCodes = groupData?.teams || [];
-              }
-            }
-            options = teamCodes
+          const spec = sideSpec(side, getQualifierGroupsForR32(idx));
+          if (spec && !spec.groups) {
+            const groupData = WC.groups.find(g => g.id === spec.group);
+            options = (groupData?.teams || [])
               .map(code => {
-                const team = WC.teams[code];
+                const t = WC.teams[code];
                 const selected = slot[side] === code ? ' selected' : '';
-                return `<option value="${code}"${selected}>${team.name}</option>`;
+                return `<option value="${code}"${selected}>${t.name}</option>`;
               })
               .join('');
           }
@@ -1278,10 +1468,10 @@ function bktCard(roundId, idx, hasSelects, locked) {
                     ${options}
                   </select>`;
         })()
-      : `<div class="bkt-slot${team ? ' filled' : ''}${isWinner ? ' winner' : ''}">
+      : `<div class="bkt-slot${team ? ' filled' : ''}${isWinner ? ' winner' : ''}${thirdSlot ? ' bkt-third' : ''}">
            ${team
-             ? `${flagImg(team, 'bkt-flag')}<span class="bkt-tname">${team.name}</span>`
-             : `<span class="bkt-tbd">TBD</span>`}
+             ? `${thirdSlot ? '<span class="bkt-third-badge" title="Auto-placed 3rd-place qualifier">3rd</span>' : ''}${flagImg(team, 'bkt-flag')}<span class="bkt-tname">${team.name}</span>`
+             : `<span class="bkt-tbd">${thirdSlot ? '3rd — TBD' : 'TBD'}</span>`}
          </div>`;
     return `<div class="bkt-team-line">${teamCell}${scoreInput(side === 'home' ? 'hScore' : 'aScore')}</div>`;
   };
@@ -1343,60 +1533,19 @@ function autoFillKo() {
     tops[g.id] = { first: s[0]?.code || '', second: s[1]?.code || '' };
   });
 
-  // Calculate third-place teams and their rankings
-  const thirdPlaceData = WC.groups.map(g => {
-    const s = calcGroupStandings(g.id, S.user.id);
-    return {
-      group: g.id,
-      code: s[2]?.code || '',
-      pts: s[2]?.pts || 0,
-      gd: (s[2]?.gf || 0) - (s[2]?.ga || 0),
-      gf: s[2]?.gf || 0
-    };
-  }).filter(t => t.code);
-
-  // Sort by pts, then GD, then GF
-  thirdPlaceData.sort((a, b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts;
-    if (b.gd !== a.gd) return b.gd - a.gd;
-    return b.gf - a.gf;
-  });
-
-  const qualifiedThirdPlaces = thirdPlaceData.slice(0, 8);
-
-  // Resolve a side spec ({group,pos} or {groups,pos:3}) to a team code.
-  // For third-place slots, use the best qualified third-placer from the
-  // allowed groups that hasn't been assigned yet.
-  const usedThirdPlaces = new Set();
-  const resolveSide = (side) => {
-    if (side.groups) {
-      for (const tp of qualifiedThirdPlaces) {
-        if (side.groups.includes(tp.group) && !usedThirdPlaces.has(tp.code)) {
-          usedThirdPlaces.add(tp.code);
-          return tp.code;
-        }
-      }
-      return '';
-    }
+  // Fill only the group winner / runner-up sides from the group tables. The
+  // eight 3rd-place sides are filled automatically by applyThirdSlots() (run
+  // inside cascadeWinners) using the official FIFA allocation table.
+  const sideTeam = (side) => {
+    if (side.groups) return '';            // 3rd-place slot — auto-placed
     const t = tops[side.group];
     if (!t) return '';
     return side.pos === 1 ? (t.first || '') : (t.second || '');
   };
 
-  // Resolve all 3rd-place slots first so the global "highest-ranked first"
-  // rule isn't biased by array order of non-3rd matches.
-  const thirdResolved = {};
-  R32_PAIRINGS.forEach((pair, i) => {
-    if (pair.away.groups) thirdResolved[`${i}-away`] = resolveSide(pair.away);
-    if (pair.home.groups) thirdResolved[`${i}-home`] = resolveSide(pair.home);
-  });
-
-  const r32Pairs = R32_PAIRINGS.map((pair, i) => [
-    pair.home.groups ? (thirdResolved[`${i}-home`] || '') : resolveSide(pair.home),
-    pair.away.groups ? (thirdResolved[`${i}-away`] || '') : resolveSide(pair.away),
-  ]);
-
-  S.koPredictions.r32 = r32Pairs.map(([h, a]) => ({home: h||'', away: a||'', winner: ''}));
+  S.koPredictions.r32 = R32_PAIRINGS.map(pair => ({
+    home: sideTeam(pair.home), away: sideTeam(pair.away), winner: ''
+  }));
   cascadeWinners();
   debouncedSave();
   renderBracket();
@@ -1971,11 +2120,11 @@ function exportCSV() {
     return S.allUsers.find(u => u.id === id) || { name: 'Unknown' };
   };
 
-  const rows = [['Name','Group Pts','Knockout Pts','Bonus Pts','Total','Filled']];
+  const rows = [['Name','Group Pts','Knockout Pts','3rd-Place Pts','Bonus Pts','Total','Filled']];
   [...allIds].forEach(id => {
     const u = getUserObj(id);
     const s = calcScore(id);
-    rows.push([u.name, s.group, s.ko, s.bonus, s.total, countFilled(id)]);
+    rows.push([u.name, s.group, s.ko, s.thirds || 0, s.bonus, s.total, countFilled(id)]);
   });
 
   const csv = rows.map(r => r.join(',')).join('\n');
