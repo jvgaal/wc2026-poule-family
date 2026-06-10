@@ -139,6 +139,48 @@ function saveResults(p) {
   return { ok: true };
 }
 
+// ── AUTO-LOCK ROUNDS ──────────────────────────────────
+// Time-driven trigger: Deploy → Triggers → New → autoLockRounds → Time-driven → Hourly
+// Locks knockout rounds automatically when their lockDate has passed.
+// Uses the same lockDate values as data.js (kept in sync manually).
+const LOCK_DATES = {
+  r32:   '2026-06-28',
+  r16:   '2026-07-05',
+  qf:    '2026-07-10',
+  sf:    '2026-07-14',
+  third: '2026-07-18',
+  final: '2026-07-19',
+};
+
+function autoLockRounds() {
+  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const cfg   = readSheet(ss, SHEET_CONFIG);
+  let locked  = {};
+  cfg.slice(1).forEach(r => {
+    if (!r[0]) return;
+    try { if (r[0] === 'locked') locked = JSON.parse(r[1]); } catch(_) {}
+  });
+
+  const now = new Date();
+  const updates = [];
+  Object.entries(LOCK_DATES).forEach(([roundId, dateStr]) => {
+    if (locked[roundId]) return; // already locked
+    const lockDate = new Date(dateStr + 'T00:00:00');
+    if (now >= lockDate) {
+      locked[roundId] = true;
+      updates.push(roundId + ' (' + dateStr + ')');
+    }
+  });
+
+  if (updates.length > 0) {
+    upsertRow(ss, SHEET_CONFIG, 'locked', ['locked', JSON.stringify(locked)]);
+    Logger.log('Auto-locked rounds: ' + updates.join(', '));
+    // Note: cross-backend mirroring is handled by the frontend on next user interaction.
+    // If you want server-side mirroring too, set MIRROR_BACKEND_URL in Script Properties
+    // and implement UrlFetchApp POST here.
+  }
+}
+
 // ── SAVE CONFIG (admin) ────────────────────────────────
 function saveConfig(p) {
   if (!p.pw || p.pw !== getAdminPw()) return { error: 'Unauthorized' };

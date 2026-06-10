@@ -26,10 +26,11 @@ const flagImg = (team, cls = 'flag-inline') =>
 // same person is the same account on every device (no typing, no duplicates).
 // Names match the assets/<Name> profile photos.
 const FAMILY_ROSTER = [
-  { name: 'Jorg',   id: 'u_1778120805113_o2vyy' }, // unchanged — has existing predictions
-  { name: 'Lwande', id: 'fam_lwande' },
-  { name: 'Mumba',  id: 'fam_mumba'  },
-  { name: 'Nimon',  id: 'fam_nimon'  },
+  { name: 'Jorg',     id: 'u_1778120805113_o2vyy' }, // unchanged — has existing predictions
+  { name: 'Lwande',   id: 'fam_lwande' },
+  { name: 'Jeremiah', id: 'fam_mumba'  }, // keeps id 'fam_mumba' — scores entered under this account were Jeremiah's
+  { name: 'Mumba',    id: 'fam_mumba2' }, // fresh account for the real Mumba to fill in his own scores
+  { name: 'Nimon',    id: 'fam_nimon'  },
   { name: 'Storm',  id: 'fam_storm'  },
   { name: 'Temwa',  id: 'fam_temwa'  },
   { name: 'Tezya',  id: 'fam_tezya'  },
@@ -2235,12 +2236,20 @@ function signOut() {
 }
 
 // Returns the name to display publicly for any user object
+// The family roster is authoritative for id → name. A server record whose name
+// lags (e.g. Jeremiah's account is still stored under the old "Mumba" name) is
+// overridden here so the right name AND profile photo show everywhere.
+function rosterName(user) {
+  if (!user?.id) return null;
+  return FAMILY_ROSTER.find(p => p.id === user.id)?.name || null;
+}
+
 function displayName(user) {
   if (!user) return '?';
   if (S.user && user.id === S.user.id) {
     return S.user.nickname || String(S.user.name || '').split(' ')[0] || '?';
   }
-  return user.name || user.id || '?';   // for other users, name IS their stored nickname
+  return rosterName(user) || user.name || user.id || '?';   // for other users, name IS their stored nickname
 }
 
 function showNicknameStep(suggestedName) {
@@ -2599,8 +2608,9 @@ function avatarHtml(user, size = 28) {
 }
 
 const PROFILE_PHOTOS = {
-  storm:  'Storm profile.png',
-  mumba:  'Mumba profile.png',
+  storm:    'Storm profile.png',
+  mumba:    'Mumba profile.png',
+  jeremiah: 'Jeremiah profile.png',
   temwa:  'Temwa profile.png',
   jorg:   'Jorg profile.png',
   nimon:  'Nimon profile.png',
@@ -2609,7 +2619,10 @@ const PROFILE_PHOTOS = {
 };
 
 function getProfilePhoto(user) {
-  const key = String(user?.nickname || user?.name || '').toLowerCase().replace(/\s+/g, '');
+  // Prefer the authoritative roster name (by id) so a lagging server record
+  // still maps to the right photo; fall back to nickname/name for the picker.
+  const key = String(rosterName(user) || user?.nickname || user?.name || '')
+    .toLowerCase().replace(/\s+/g, '');
   return PROFILE_PHOTOS[key] || null;
 }
 
