@@ -95,10 +95,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (S.user) {
     closeModal();
     updateHeaderUser();
-    if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
   } else {
     openModal();
   }
+  syncAdminVisibility();
 
   buildColorPicker();
   bindNav();
@@ -132,11 +132,6 @@ function loadLocal() {
     S.results          = JSON.parse(localStorage.getItem('wc26_results')) || {};
     S.config           = JSON.parse(localStorage.getItem('wc26_config'))  || { locked: {}, prizes: { p1:'TBA', p2:'TBA', p3:'TBA' } };
     S.isAdmin          = localStorage.getItem('wc26_is_admin') === '1';
-    // Restore admin tab if isAdmin
-    if (S.isAdmin) {
-      const tab = document.getElementById('admin-tab');
-      if (tab) tab.style.display = '';
-    }
     // Migrate nickname into the persistent store if not already there
     if (S.user?.id && S.user?.nickname) persistNickname(S.user.id, S.user.nickname);
   } catch(e) { /* corrupted data — start fresh */ }
@@ -375,13 +370,23 @@ function bindNav() {
   });
 }
 
+function adminAllowed() {
+  return S.isAdmin || S.adminUnlocked;
+}
+
+function syncAdminVisibility() {
+  const tab = document.getElementById('admin-tab');
+  if (!tab) return;
+  tab.style.display = adminAllowed() ? '' : 'none';
+  if (!adminAllowed() && S.activeTab === 'admin') switchTab('leaderboard');
+}
+
 function rebuildMobileNavItems() {
   const dropdown = document.getElementById('nav-mobile-dropdown');
   if (!dropdown) return;
   dropdown.innerHTML = '';
-  const adminAllowed = S.isAdmin || S.adminUnlocked;
   document.querySelectorAll('.nav-tab').forEach(tab => {
-    if (tab.dataset.tab === 'admin' && !adminAllowed) return;
+    if (tab.dataset.tab === 'admin' && !adminAllowed()) return;
     const item = document.createElement('button');
     item.className = 'nav-mobile-item';
     item.dataset.tab = tab.dataset.tab;
@@ -449,6 +454,7 @@ function updateMobileNavActive() {
 }
 
 function switchTab(tab) {
+  if (tab === 'admin' && !adminAllowed()) return;
   S.activeTab = tab;
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${tab}`));
@@ -1805,7 +1811,7 @@ async function unlockAdmin() {
   S.adminUnlocked = true;
   localStorage.setItem('wc26_is_admin', '1');
   S.isAdmin = true;
-  document.getElementById('admin-tab').style.display = '';
+  syncAdminVisibility();
   rebuildMobileNavItems();
   btn.disabled    = false;
   btn.textContent = 'Unlock';
@@ -2209,7 +2215,7 @@ window.handleGoogleSignIn = function(response) {
     if (S.user.nickname) {
       closeModal();
       updateHeaderUser();
-      if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
+      syncAdminVisibility();
       syncRemote();
       renderActiveView();
       showToast(`Welcome back, ${S.user.nickname}! ⚽`, 'success');
@@ -2230,7 +2236,7 @@ function signOut() {
   localStorage.removeItem('wc26_user');
   closeUserMenu();
   updateHeaderUser();
-  document.getElementById('admin-tab').style.display = 'none';
+  syncAdminVisibility();
   openModal();
   renderActiveView();
 }
@@ -2277,7 +2283,7 @@ function saveNickname(isChange = false) {
   const sb = document.getElementById('sso-block');
   if (sb) sb.style.display = '';
   updateHeaderUser();
-  if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
+  syncAdminVisibility();
   syncRemote();
   renderActiveView();
   showToast(isChange ? `Nickname updated to "${nick}" ✓` : `Let's go, ${nick}! ⚽`, 'success');
@@ -2429,7 +2435,7 @@ async function completeRosterLogin() {
   S.pendingPick = null;
   closeModal();
   updateHeaderUser();
-  if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
+  syncAdminVisibility();
 
   // Pull THIS account's saved predictions from the server BEFORE rendering or
   // saving, so a fresh device (phone, cleared cache) shows the existing picks
@@ -2549,7 +2555,7 @@ async function registerUser() {
   saveLocal();
   closeModal();
   updateHeaderUser();
-  if (S.isAdmin || S.adminUnlocked) document.getElementById('admin-tab').style.display = '';
+  syncAdminVisibility();
   syncRemote();
   renderActiveView();
   showToast(`Welcome${existing ? ' back' : ''}, ${S.user.nickname}! 🎉`, 'success');

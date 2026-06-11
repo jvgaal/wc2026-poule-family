@@ -113,15 +113,43 @@ function syncUser(p) {
   if (!uid) return { error: 'Missing userId' };
 
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const config = getConfig(ss);
+  const existing = getUserPredictions(ss, uid);
 
   // Upsert user row (email in col 4)
   upsertRow(ss, SHEET_USERS, uid, [uid, name, color, email, new Date().toISOString()]);
 
   // Upsert predictions row
-  const group = p.group || '{}';
-  const bonus = p.bonus || '{}';
-  const ko    = p.ko    || '{}';
-  upsertRow(ss, SHEET_PREDS, uid, [uid, group, bonus, ko, new Date().toISOString()]);
+  const locked = config.locked || {};
+  let group = parseJson(p.group || '{}', {});
+  const bonus = parseJson(p.bonus || '{}', {});
+  let ko = parseJson(p.ko || '{}', {});
+
+  if (locked.group) group = existing.group || {};
+  if (locked.group) {
+    if (existing.ko && Object.prototype.hasOwnProperty.call(existing.ko, '_thirds')) {
+      ko._thirds = existing.ko._thirds;
+    } else {
+      delete ko._thirds;
+    }
+  }
+
+  Object.keys(LOCK_DATES).forEach(roundId => {
+    if (roundId === 'group' || !locked[roundId]) return;
+    if (existing.ko && Object.prototype.hasOwnProperty.call(existing.ko, roundId)) {
+      ko[roundId] = existing.ko[roundId];
+    } else {
+      delete ko[roundId];
+    }
+  });
+
+  upsertRow(ss, SHEET_PREDS, uid, [
+    uid,
+    JSON.stringify(group),
+    JSON.stringify(bonus),
+    JSON.stringify(ko),
+    new Date().toISOString()
+  ]);
 
   return { ok: true };
 }
@@ -144,6 +172,7 @@ function saveResults(p) {
 // Locks knockout rounds automatically when their lockDate has passed.
 // Uses the same lockDate values as data.js (kept in sync manually).
 const LOCK_DATES = {
+  group: '2026-06-11T18:00:00Z',
   r32:   '2026-06-28',
   r16:   '2026-07-05',
   qf:    '2026-07-10',
@@ -154,18 +183,14 @@ const LOCK_DATES = {
 
 function autoLockRounds() {
   const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const cfg   = readSheet(ss, SHEET_CONFIG);
-  let locked  = {};
-  cfg.slice(1).forEach(r => {
-    if (!r[0]) return;
-    try { if (r[0] === 'locked') locked = JSON.parse(r[1]); } catch(_) {}
-  });
+  const config = getConfig(ss);
+  const locked = config.locked || {};
 
   const now = new Date();
   const updates = [];
   Object.entries(LOCK_DATES).forEach(([roundId, dateStr]) => {
     if (locked[roundId]) return; // already locked
-    const lockDate = new Date(dateStr + 'T00:00:00');
+    const lockDate = lockDateFromString(dateStr);
     if (now >= lockDate) {
       locked[roundId] = true;
       updates.push(roundId + ' (' + dateStr + ')');
@@ -232,6 +257,40 @@ function readSheet(ss, name) {
   const last = sheet.getLastRow();
   if (last < 1) return [];
   return sheet.getRange(1, 1, last, sheet.getLastColumn() || 1).getValues();
+}
+
+function parseJson(value, fallback) {
+  try { return JSON.parse(value || ''); } catch(_) { return fallback; }
+}
+
+function lockDateFromString(value) {
+  return new Date(String(value).indexOf('T') >= 0 ? value : value + 'T00:00:00');
+}
+
+function getConfig(ss) {
+  const cfgRows = readSheet(ss, SHEET_CONFIG);
+  const config = { locked: {}, prizes: { p1:'TBA', p2:'TBA', p3:'TBA' } };
+  cfgRows.slice(1).forEach(r => {
+    if (!r[0]) return;
+    const val = parseJson(r[1], null);
+    if (val === null) return;
+    if (r[0] === 'locked') config.locked = val;
+    if (r[0] === 'prizes') config.prizes = val;
+  });
+  return config;
+}
+
+function getUserPredictions(ss, userId) {
+  const rows = readSheet(ss, SHEET_PREDS);
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] !== userId) continue;
+    return {
+      group: parseJson(rows[i][1], {}),
+      bonus: parseJson(rows[i][2], {}),
+      ko:    parseJson(rows[i][3], {}),
+    };
+  }
+  return { group: {}, bonus: {}, ko: {} };
 }
 
 function upsertRow(ss, sheetName, keyValue, rowData) {
