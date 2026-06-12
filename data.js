@@ -220,6 +220,29 @@ const WC = {
     .map(([code, t]) => ({ code, ...t }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  WC.playerList = [
+    "Kylian Mbappé","Harry Kane","Erling Haaland","Lamine Yamal","Lionel Messi",
+    "Vinicius Jr.","Rodri","Jude Bellingham","Phil Foden","Bukayo Saka",
+    "Pedri","Ferran Torres","Alejandro Garnacho","Florian Wirtz","Jamal Musiala",
+    "Cristiano Ronaldo","Bruno Fernandes","Rafael Leão","Bernardo Silva","Rúben Dias",
+    "Neymar Jr.","Raphinha","Endrick","Rodrygo","Gabriel Martinelli",
+    "Federico Valverde","Darwin Núñez","Antoine Griezmann","Ousmane Dembélé","Marcus Thuram",
+    "Victor Osimhen","Sébastien Haller","Sadio Mané","Mohamed Salah","Achraf Hakimi",
+    "Riyad Mahrez","Son Heung-min","Takefusa Kubo","Robert Lewandowski","Dusan Vlahovic",
+    "Cody Gakpo","Memphis Depay","Virgil van Dijk","Donyell Malen","Xavi Simons",
+    "Álvaro Morata","Dani Olmo","Mikel Merino","Nico Williams","Gavi",
+    "Paulo Dybala","Lautaro Martínez","Julián Álvarez","Ángel Di María","Nicolás González",
+    "Richarlison","Gabriel Jesus","Paquetá","Casemiro","Militão",
+    "Ivan Toney","Cole Palmer","Ollie Watkins","Declan Rice","Trent Alexander-Arnold",
+    "Serge Gnabry","Kai Havertz","Thomas Müller","Leroy Sané","Antonio Rüdiger",
+    "Niclas Füllkrug","Christopher Nkunku","Khvicha Kvaratskhelia","Giorgio Scalvini","Sandro Tonali",
+    "Jonathan David","Alphonso Davies","Tajon Buchanan","Cyle Larin","Milan Borjan",
+    "Christian Pulisic","Tyler Adams","Weston McKennie","Ricardo Pepi","Folarin Balogun",
+    "Hirving Lozano","Santiago Giménez","Edson Álvarez","Alexis Vega","Julio González",
+    "Tim Weah","Nicolas Jackson","Kofi Boateng","Emmanuel Gyasi",
+    "Ismaïla Sarr","Krépin Diatta","Kalidou Koulibaly","Idrissa Gana Gueye",
+  ].sort();
+
   // Matches per group lookup
   WC.matchesByGroup = {};
   WC.groups.forEach(g => {

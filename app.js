@@ -1659,8 +1659,11 @@ function bonusCard(q, locked = false) {
       ${WC.teamList.map(t => `<option value="${t.code}" ${val === t.code ? 'selected' : ''}>${t.name}</option>`).join('')}
     </select>`;
   } else if (q.type === 'player') {
-    input = `<input class="bonus-input" type="text" data-qid="${q.id}"
-               value="${esc(val)}" placeholder="Player name…" ${dis} />`;
+    const opts = WC.playerList.map(p => `<option value="${esc(p)}" ${val === p ? 'selected' : ''}>${esc(p)}</option>`).join('');
+    input = `<select class="bonus-input" data-qid="${q.id}" ${dis}>
+      <option value="">— Select player —</option>
+      ${opts}
+    </select>`;
   } else if (q.type === 'number') {
     input = `<input class="bonus-input" type="number" data-qid="${q.id}"
                value="${val}" placeholder="e.g. 280" min="0" max="500" ${dis} />`;
