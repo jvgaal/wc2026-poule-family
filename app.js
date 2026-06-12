@@ -1888,6 +1888,7 @@ function renderAdminContent() {
   renderAdminGroupSelector();
   renderAdminResultGrid(S.adminGroup);
   renderAdminKoResultGrid(S.adminKoRound);
+  renderAdminBonusResultGrid();
   renderPrizeInputs();
   updateHowtoPrizes();
   renderAdminUsers();
@@ -2039,6 +2040,51 @@ function saveResult(matchId, side, value) {
   S.results[matchId][side] = value === '' ? undefined : +value;
   saveLocal();
   syncRemoteResults();
+}
+
+function renderAdminBonusResultGrid() {
+  const el = document.getElementById('admin-bonus-result-grid');
+  if (!el) return;
+  el.innerHTML = WC.bonusQuestions.map(q => {
+    const val = S.results[`bonus_${q.id}`] ?? '';
+    let input = '';
+    if (q.type === 'team') {
+      input = `<select onchange="saveBonusResult('${q.id}', this.value)"
+                 style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px">
+        <option value="">— Not decided —</option>
+        ${WC.teamList.map(t => `<option value="${t.code}" ${val === t.code ? 'selected' : ''}>${t.name}</option>`).join('')}
+      </select>`;
+    } else if (q.type === 'number') {
+      input = `<input type="number" min="0" max="500" placeholder="e.g. 280"
+                 value="${val}" onchange="saveBonusResult('${q.id}', this.value)"
+                 style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px">`;
+    } else { // player (or any free-text)
+      input = `<input type="text" placeholder="Player name…"
+                 value="${esc(val)}" onchange="saveBonusResult('${q.id}', this.value)"
+                 style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px">`;
+    }
+    return `
+    <div class="result-entry-card">
+      <div class="result-entry-label">${q.emoji} ${q.question}</div>
+      <div class="result-entry-row">
+        <span>Answer:</span>
+        ${input}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveBonusResult(qid, value) {
+  const key = `bonus_${qid}`;
+  if (value === '' || value === null || value === undefined) {
+    delete S.results[key];
+  } else {
+    S.results[key] = value;
+  }
+  saveLocal();
+  syncRemoteResults();
+  // Scores depend on bonus results, so refresh the standings if they're showing.
+  if (S.activeTab === 'leaderboard') renderLeaderboard();
 }
 
 function buildAdminKoRoundTabs() {
