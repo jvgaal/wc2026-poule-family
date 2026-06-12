@@ -10,9 +10,11 @@ const WC = {
   end: "2026-07-19",
   finalVenue: "MetLife Stadium, New York / New Jersey",
 
-  // Bonus answers auto-lock at this moment (admin can also lock early /
-  // re-open via the Bonus toggle in the lock grid). June = UTC+2 for both
-  // Amsterdam (CEST) and Zambia (CAT), so this is the same instant for all.
+  // Auto-lock schedule. A round locks once its date passes (admin can also
+  // lock early via the lock grid). June = UTC+2 for both Amsterdam (CEST) and
+  // Zambia (CAT), so these are the same instant for everyone. KO rounds carry
+  // their own `lockDate` on each WC.koRounds entry below.
+  groupLockDate: "2026-06-11T17:00:00+02:00", // first group match kickoff
   bonusLockDate: "2026-06-13T12:00:00+02:00",
 
   teams: {

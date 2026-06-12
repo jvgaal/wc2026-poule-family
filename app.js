@@ -869,7 +869,7 @@ function renderGroupContent(groupId) {
   const el    = document.getElementById('group-content');
   const group = WC.groups.find(g => g.id === groupId);
   const matches = WC.matchesByGroup[groupId];
-  const locked  = S.config.locked?.group;
+  const locked  = isRoundLocked('group');
 
   // Progress for this group
   const filled = matches.filter(m => S.predictions[m.id] !== undefined).length;
@@ -1083,7 +1083,7 @@ function cascadeWinners() {
 }
 
 function renderBracket() {
-  const lkd = id => !!S.config.locked?.[id];
+  const lkd = id => isRoundLocked(id);
   const col  = (roundId, from, to, hasSelects) =>
     `<div class="bkt-col" data-round="${roundId}">
        ${bktColHdr(roundId)}
@@ -1249,7 +1249,7 @@ function setKoScore(roundId, idx, side, val) {
 
 function bktColHdr(roundId) {
   const r = WC.koRounds.find(x => x.id === roundId);
-  const locked = S.config.locked?.[roundId];
+  const locked = isRoundLocked(roundId);
   return `<div class="bkt-col-hdr">
     <span class="bkt-col-name">${r.name}</span>
     <span class="bkt-col-pts">${locked ? '🔒' : `+${r.pts}pts`}</span>
@@ -1579,14 +1579,29 @@ function autoFillKo() {
 // ══════════════════════════════════════════════════════
 //  BONUS VIEW
 // ══════════════════════════════════════════════════════
-// Bonus answers lock when the admin flips the Bonus toggle OR once the
-// auto-deadline (WC.bonusLockDate) has passed — whichever comes first.
-function isBonusLocked() {
-  if (S.config.locked?.bonus) return true;
-  if (!WC.bonusLockDate) return false;
-  const deadline = new Date(WC.bonusLockDate).getTime();
-  return Number.isFinite(deadline) && Date.now() >= deadline;
+// ── Locking ────────────────────────────────────────────────────────────
+// A round (group stage / each KO round / bonus) is locked when the admin has
+// flipped its switch in the lock grid, OR its scheduled lock date has passed —
+// whichever comes first. Lock dates live in data.js: WC.groupLockDate,
+// WC.bonusLockDate, and `lockDate` on each WC.koRounds entry.
+function roundLockDate(roundId) {
+  if (roundId === 'group') return WC.groupLockDate;
+  if (roundId === 'bonus') return WC.bonusLockDate;
+  return WC.koRounds.find(r => r.id === roundId)?.lockDate || null;
 }
+
+function autoLockPassed(dateStr) {
+  if (!dateStr) return false;
+  const t = new Date(dateStr).getTime();
+  return Number.isFinite(t) && Date.now() >= t;
+}
+
+function isRoundLocked(roundId) {
+  return !!S.config.locked?.[roundId] || autoLockPassed(roundLockDate(roundId));
+}
+
+// Bonus is just another lockable round.
+function isBonusLocked() { return isRoundLocked('bonus'); }
 
 function renderBonus() {
   if (!S.user) { renderLoginPromptInView('bonus-grid'); return; }
@@ -1954,16 +1969,23 @@ function renderLockGrid() {
     ...WC.koRounds.map(r => ({ id: r.id, label: r.name })),
     { id: 'bonus', label: 'Bonus Questions' },
   ];
-  grid.innerHTML = rounds.map(r => `
+  grid.innerHTML = rounds.map(r => {
+    const manual = !!S.config.locked?.[r.id];
+    const auto   = autoLockPassed(roundLockDate(r.id));
+    // Once the scheduled time has passed the round is locked no matter what,
+    // so disable the toggle and show it as auto-locked.
+    const status = auto ? '🔒 Locked (auto)' : manual ? '🔒 Locked' : '🔓 Open';
+    return `
     <div class="lock-item">
       <span class="lock-label">${r.label}</span>
       <label class="toggle-switch">
-        <input type="checkbox" ${S.config.locked?.[r.id] ? 'checked' : ''}
+        <input type="checkbox" ${manual || auto ? 'checked' : ''} ${auto ? 'disabled' : ''}
                onchange="toggleLock('${r.id}', this.checked)" />
         <span class="toggle-slider"></span>
       </label>
-      <span style="font-size:12px;color:var(--text-dim)">${S.config.locked?.[r.id] ? '🔒 Locked' : '🔓 Open'}</span>
-    </div>`).join('');
+      <span style="font-size:12px;color:var(--text-dim)">${status}</span>
+    </div>`;
+  }).join('');
 }
 
 function toggleLock(roundId, locked) {
