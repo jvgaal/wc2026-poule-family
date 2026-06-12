@@ -773,6 +773,25 @@ function renderLeaderboard() {
     return { ...getUserObj(id), score, filled };
   }).sort((a, b) => b.score.total - a.score.total || b.filled - a.filled);
 
+  // Podium: drop the top-3 players' faces + names into the prize cards.
+  // Falls back to the static medal silhouette when that rank isn't filled yet.
+  ['1','2','3'].forEach(n => {
+    const player = ranked[Number(n) - 1];
+    const sil  = document.getElementById(`ph-sil-${n}`);
+    const name = document.getElementById(`prize-name-${n}`);
+    if (!sil) return;
+    if (player) {
+      const photo = getProfilePhoto(player);
+      const dn = displayName(player);
+      sil.innerHTML = photo
+        ? `<img class="prize-player-face" src="assets/${photo}" alt="${esc(dn)}" />`
+        : `<div class="prize-player-face fallback">${esc((dn[0] || '?').toUpperCase())}</div>`;
+      if (name) name.textContent = dn;
+    } else if (name) {
+      name.textContent = '';
+    }
+  });
+
   // Stats
   const totalParticipants = ranked.length;
   document.getElementById('lb-participant-count').textContent =
