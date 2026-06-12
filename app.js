@@ -751,12 +751,22 @@ function renderLeaderboard() {
     return { ...getUserObj(id), score, filled };
   }).sort((a, b) => b.score.total - a.score.total || b.filled - a.filled);
 
-  // Per-photo crop tuning — some source photos are wider shots, so zoom in
-  // (and shift the focal point up) to frame the face like a profile pic.
-  // Keyed by photo filename; default is no zoom, cropped from the top.
+  // Per-photo crop tuning — the source photos are themed full-scene shots
+  // with faces at very different sizes/positions, so zoom + shift each one to
+  // frame the face like a profile pic. Keyed by photo filename; anyone not
+  // listed falls back to no zoom, cropped from the top.
+  // To re-tune: bump `zoom` (higher = tighter) and `pos` ('x% y%', lower y =
+  // shows more above the face). If you add a dedicated headshot file for
+  // someone, just point their key at it via PROFILE_PHOTOS instead.
   const FACE_ADJUST = {
-    'Storm profile.png':  { zoom: 1.5, pos: 'center 28%' },
-    'Lwande profile.png': { zoom: 1.5, pos: 'center 25%' },
+    'Jorg profile.png':     { zoom: 1.2,  pos: 'center 20%' },
+    'Nimon profile.png':    { zoom: 1.25, pos: 'center 26%' },
+    'Mumba profile.png':    { zoom: 1.4,  pos: '62% 40%' },
+    'Tezya profile.png':    { zoom: 1.9,  pos: '55% 55%' },
+    'Storm profile.png':    { zoom: 1.5,  pos: 'center 28%' },
+    'Lwande profile.png':   { zoom: 1.5,  pos: 'center 25%' },
+    'Jeremiah profile.png': { zoom: 2.1,  pos: '43% 30%' },
+    'Temwa profile.png':    { zoom: 2.3,  pos: '52% 12%' },
   };
 
   // Podium: drop the top-3 players' faces + names into the prize cards.
