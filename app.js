@@ -751,6 +751,14 @@ function renderLeaderboard() {
     return { ...getUserObj(id), score, filled };
   }).sort((a, b) => b.score.total - a.score.total || b.filled - a.filled);
 
+  // Per-photo crop tuning — some source photos are wider shots, so zoom in
+  // (and shift the focal point up) to frame the face like a profile pic.
+  // Keyed by photo filename; default is no zoom, cropped from the top.
+  const FACE_ADJUST = {
+    'Storm profile.png':  { zoom: 1.5, pos: 'center 28%' },
+    'Lwande profile.png': { zoom: 1.5, pos: 'center 25%' },
+  };
+
   // Podium: drop the top-3 players' faces + names into the prize cards.
   // Falls back to the static medal silhouette when that rank isn't filled yet.
   ['1','2','3'].forEach(n => {
@@ -761,8 +769,10 @@ function renderLeaderboard() {
     if (player) {
       const photo = getProfilePhoto(player);
       const dn = displayName(player);
+      const adj = FACE_ADJUST[photo];
+      const adjStyle = adj ? `style="--face-zoom:${adj.zoom};--face-pos:${adj.pos}"` : '';
       sil.innerHTML = photo
-        ? `<img class="prize-player-face" src="assets/${photo}" alt="${esc(dn)}" />`
+        ? `<img class="prize-player-face" src="assets/${photo}" alt="${esc(dn)}" ${adjStyle} />`
         : `<div class="prize-player-face fallback">${esc((dn[0] || '?').toUpperCase())}</div>`;
       if (name) name.textContent = dn;
     } else if (name) {
