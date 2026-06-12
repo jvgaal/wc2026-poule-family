@@ -1354,6 +1354,28 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
 
 .bonus-card:hover { border-color: var(--border-hi); }
 
+.bonus-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 196, 0, 0.08);
+  border: 1px solid rgba(255, 196, 0, 0.35);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bonus-card.locked { opacity: 0.85; }
+.bonus-card.locked:hover { border-color: var(--border); }
+.bonus-input:disabled,
+.bool-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .bonus-card-top {
   display: flex;
   align-items: center;

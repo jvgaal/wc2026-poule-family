@@ -1579,11 +1579,34 @@ function autoFillKo() {
 // ══════════════════════════════════════════════════════
 //  BONUS VIEW
 // ══════════════════════════════════════════════════════
+// Bonus answers lock when the admin flips the Bonus toggle OR once the
+// auto-deadline (WC.bonusLockDate) has passed — whichever comes first.
+function isBonusLocked() {
+  if (S.config.locked?.bonus) return true;
+  if (!WC.bonusLockDate) return false;
+  const deadline = new Date(WC.bonusLockDate).getTime();
+  return Number.isFinite(deadline) && Date.now() >= deadline;
+}
+
 function renderBonus() {
   if (!S.user) { renderLoginPromptInView('bonus-grid'); return; }
 
+  const locked = isBonusLocked();
   const grid = document.getElementById('bonus-grid');
-  grid.innerHTML = WC.bonusQuestions.map(q => bonusCard(q)).join('');
+
+  const banner = document.getElementById('bonus-lock-banner');
+  if (banner) {
+    if (locked) {
+      banner.style.display = '';
+      banner.innerHTML = `🔒 Bonus answers are locked — they can no longer be changed.`;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  grid.innerHTML = WC.bonusQuestions.map(q => bonusCard(q, locked)).join('');
+
+  if (locked) return;  // nothing editable, so no listeners to wire
 
   // Wire up inputs
   grid.querySelectorAll('[data-qid]').forEach(el => {
@@ -1609,38 +1632,39 @@ function renderBonus() {
   });
 }
 
-function bonusCard(q) {
+function bonusCard(q, locked = false) {
   const val  = S.bonusPredictions[q.id] || '';
   const links = q.links.map(l => `<a class="odds-link" href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join('');
+  const dis = locked ? 'disabled' : '';
 
   let input = '';
   if (q.type === 'team') {
-    input = `<select class="bonus-input" data-qid="${q.id}">
+    input = `<select class="bonus-input" data-qid="${q.id}" ${dis}>
       <option value="">— Select team —</option>
       ${WC.teamList.map(t => `<option value="${t.code}" ${val === t.code ? 'selected' : ''}>${t.name}</option>`).join('')}
     </select>`;
   } else if (q.type === 'player') {
     input = `<input class="bonus-input" type="text" data-qid="${q.id}"
-               value="${esc(val)}" placeholder="Player name…" />`;
+               value="${esc(val)}" placeholder="Player name…" ${dis} />`;
   } else if (q.type === 'number') {
     input = `<input class="bonus-input" type="number" data-qid="${q.id}"
-               value="${val}" placeholder="e.g. 280" min="0" max="500" />`;
+               value="${val}" placeholder="e.g. 280" min="0" max="500" ${dis} />`;
   } else if (q.type === 'boolean') {
     const yesClass = val === 'yes' ? 'selected-yes' : '';
     const noClass  = val === 'no'  ? 'selected-no'  : '';
     input = `<div class="bool-toggle">
-      <button class="bool-btn ${yesClass}" data-qid="${q.id}" data-val="yes">✅ Yes</button>
-      <button class="bool-btn ${noClass}"  data-qid="${q.id}" data-val="no">❌ No</button>
+      <button class="bool-btn ${yesClass}" data-qid="${q.id}" data-val="yes" ${dis}>✅ Yes</button>
+      <button class="bool-btn ${noClass}"  data-qid="${q.id}" data-val="no" ${dis}>❌ No</button>
     </div>`;
   }
 
   const ptsDisplay = typeof q.points === 'number' ? `${q.points} pts` : q.points;
 
   return `
-  <div class="bonus-card">
+  <div class="bonus-card${locked ? ' locked' : ''}">
     <div class="bonus-card-top">
       <span class="bonus-emoji">${q.emoji}</span>
-      <span class="bonus-pts">${ptsDisplay}</span>
+      <span class="bonus-pts">${locked ? '🔒' : ''} ${ptsDisplay}</span>
     </div>
     <div class="bonus-question">${q.question}</div>
     <div class="bonus-tip">${q.tip}</div>
@@ -1928,6 +1952,7 @@ function renderLockGrid() {
   const rounds = [
     { id: 'group', label: 'Group Stage' },
     ...WC.koRounds.map(r => ({ id: r.id, label: r.name })),
+    { id: 'bonus', label: 'Bonus Questions' },
   ];
   grid.innerHTML = rounds.map(r => `
     <div class="lock-item">
