@@ -732,28 +732,6 @@ function resolveActualKoMatchups(roundId) {
 //  LEADERBOARD VIEW
 // ══════════════════════════════════════════════════════
 function renderLeaderboard() {
-  // Prizes — set value + team kit background
-  // Popular team kits: Portugal 🇵🇹, Argentina 🇦🇷, France 🇫🇷
-  const PRIZE_TEAMS = {
-    p1: { team: 'POR', name: 'Portugal', kit: 'linear-gradient(135deg, #FF0000 25%, #FF0000 25%, #840000 25%, #840000 50%, #FF0000 50%, #FF0000 75%, #840000 75%)' },
-    p2: { team: 'ARG', name: 'Argentina', kit: 'linear-gradient(180deg, #6CACC5 0%, #6CACC5 50%, #FFFFFF 50%, #FFFFFF 100%)' },
-    p3: { team: 'FRA', name: 'France', kit: 'linear-gradient(180deg, #002395 50%, #FFFFFF 50%, #FFFFFF 50%, #ED2939 50%)' },
-  };
-  ['1','2','3'].forEach(n => {
-    const key = `p${n}`;
-    const el = document.getElementById(`prize-${n}`);
-    if (el) {
-      el.textContent = S.config.prizes?.[key] || 'TBA';
-      el.classList.add('editable');
-    }
-    const bg  = document.getElementById(`ph-bg-${n}`);
-    const cfg = PRIZE_TEAMS[key];
-    if (bg && cfg) {
-      bg.style.background   = cfg.kit;
-      bg.style.backgroundSize = 'cover';
-    }
-  });
-
   // Build ranked user list — union of registered users AND anyone with
   // predictions on the server (the Users sheet can lag the Predictions sheet,
   // so iterating allUsers alone would drop active players).

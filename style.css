@@ -516,21 +516,17 @@ html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
   background-position: center;
 }
 
-.prize-card.rank-1 .prize-hero-bg {
-  background: linear-gradient(135deg, #1a0a00 0%, #4a1500 30%, #8B0000 60%, #DAA520 100%);
-}
-.prize-card.rank-2 .prize-hero-bg {
-  background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 40%, #4a4a6a 70%, #8a8aaa 100%);
-}
-.prize-card.rank-3 .prize-hero-bg {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a0f00 40%, #3d2200 60%, #6b3e00 100%);
+.prize-card .prize-hero-bg {
+  background: #000;
 }
 
 .prize-player-silhouette {
   position: relative;
   z-index: 2;
-  width: 90px;
-  height: 110px;
+  width: 80%;
+  max-width: 128px;
+  aspect-ratio: 1 / 1;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -642,12 +638,12 @@ html[data-theme="dark"] .empty-state p { color: var(--text-sub); }
 .prize-player-face {
   position: relative;
   z-index: 4;
-  width: 88px;
-  height: 88px;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   object-fit: cover;
   object-position: top center;
-  border: 3px solid rgba(255,255,255,0.85);
+  border: 3px solid rgba(255,255,255,0.9);
   background-color: var(--bg-card2);
   box-shadow: 0 8px 22px rgba(0,0,0,0.7);
 }
