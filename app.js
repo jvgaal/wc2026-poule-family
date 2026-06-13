@@ -1780,10 +1780,10 @@ function viewUserPredictions(userId) {
 
   const detail = document.getElementById('browse-detail');
 
-  // Group predictions table
-  const groupRows = WC.groups.map(g => {
-    const matches = WC.matchesByGroup[g.id];
-    return matches.map(m => {
+  // Group predictions table — all matches in kickoff order (across every group)
+  // so it's easy to follow predictions chronologically rather than by group.
+  const allMatches = [...WC.matches].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const groupRows = allMatches.map(m => {
       const p    = preds[m.id];
       const res  = S.results[m.id];
       const home = WC.teams[m.home], away = WC.teams[m.away];
@@ -1798,13 +1798,12 @@ function viewUserPredictions(userId) {
       }
       return `
       <tr>
-        <td>${flagImg(home)} ${home.name} vs ${flagImg(away)} ${away.name}${m.date ? `<div style="color:var(--text-sub);font-size:11px;margin-top:2px">${fmtMatchDate(m.date)}</div>` : ''}</td>
+        <td>${flagImg(home)} ${home.name} vs ${flagImg(away)} ${away.name}${m.date ? `<div style="color:var(--text-sub);font-size:11px;margin-top:2px">Group ${m.group} · ${fmtMatchDate(m.date)}</div>` : ''}</td>
         <td><span class="pred-score ${cls}">${predTxt}</span></td>
         <td style="color:var(--text-sub)">${resTxt}</td>
         <td><span class="${cls}">${pts}</span></td>
       </tr>`;
     }).join('');
-  }).join('');
 
   // Bonus answers
   const bonusRows = WC.bonusQuestions.map(q => {
