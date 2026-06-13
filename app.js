@@ -234,6 +234,14 @@ function mirrorAdminWrite(qs) {
     .catch(e => console.warn('Mirror write failed:', e.message));
 }
 
+// Same intent as mirrorAdminWrite but as a POST — used for large payloads
+// (results) that would overflow a GET query string. Best-effort.
+function mirrorAdminPost(form) {
+  if (!isMirrorConfigured() || !S.adminPw) return;
+  fetch(CONFIG.MIRROR_BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' })
+    .catch(e => console.warn('Mirror write failed:', e.message));
+}
+
 async function fetchRemote() {
   if (!isBackendConfigured()) return;
   try {
@@ -245,8 +253,14 @@ async function fetchRemote() {
     S.rosterLoaded   = true;   // server roster is now available for name→id matching
     S.allUsers       = data.users        || [];
     S.allPredictions = data.predictions  || {};
-    S.results        = data.results      || {};
     S.config         = data.config       || S.config;
+    // Keep results authoritative from the server, but never let an empty/missing
+    // server copy wipe results this device entered locally (e.g. admin scores
+    // not yet synced). Mirrors the predictions merge guard below.
+    const serverResults = data.results || {};
+    if (Object.keys(serverResults).length > 0 || Object.keys(S.results).length === 0) {
+      S.results = serverResults;
+    }
 
     // Update How to Play prizes from server config
     updateHowtoPrizes();
@@ -307,13 +321,25 @@ async function syncRemote() {
 
 async function syncRemoteResults() {
   if (!isBackendConfigured() || !S.adminPw) return;
-  const qs = new URLSearchParams({
-    action:  'saveResults',
-    payload: JSON.stringify(S.results),
-    pw:      S.adminPw,
-  }).toString();
-  await fetch(`${CONFIG.BACKEND_URL}?${qs}`, { redirect: 'follow' });
-  mirrorAdminWrite(qs);
+  setStatus('saving');
+  try {
+    // POST (not GET): the results blob is large and overflows a query string,
+    // and the backend only accepts saveResults via doPost.
+    const form = new FormData();
+    form.append('action',  'saveResults');
+    form.append('payload', JSON.stringify(S.results));
+    form.append('pw',      S.adminPw);
+    const res  = await fetch(CONFIG.BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    if (data.error) throw new Error(data.error);
+    setStatus('saved');
+    mirrorAdminPost(form);
+  } catch(e) {
+    console.warn('Results save failed:', e.message);
+    setStatus('error');
+    showToast('Could not save results — check your connection and try again', 'error');
+  }
 }
 
 async function syncRemoteConfig() {
@@ -874,16 +900,17 @@ function renderGroupContent(groupId) {
   // Progress for this group
   const filled = matches.filter(m => S.predictions[m.id] !== undefined).length;
 
-  // Group matches by round
-  const byRound = { 1: [], 2: [], 3: [] };
-  matches.forEach(m => byRound[m.round].push(m));
+  // `matches` is already sorted chronologically (see WC.matchesByGroup). Each
+  // group has 3 matchdays of 2 matches, so chunk the sorted list into pairs.
+  const matchdays = [matches.slice(0, 2), matches.slice(2, 4), matches.slice(4, 6)];
 
-  const roundNames = { 1: 'Round 1', 2: 'Round 2', 3: 'Round 3 (simultaneous)' };
-
-  const matchCards = [1, 2, 3].map(r => `
-    <div class="match-label" style="margin-top:${r > 1 ? '20px' : '0'};color:rgba(20,32,26,0.7)">${roundNames[r]}</div>
-    ${byRound[r].map(m => matchCard(m, locked)).join('')}
-  `).join('');
+  const matchCards = matchdays.map((md, i) => {
+    if (!md.length) return '';
+    const label = md[0].date ? fmtMatchDate(md[0].date).replace(/,.*$/, '') : '';
+    return `
+    <div class="match-label" style="margin-top:${i > 0 ? '20px' : '0'};color:rgba(20,32,26,0.7)">Matchday ${i + 1}${label ? ` · ${label}` : ''}</div>
+    ${md.map(m => matchCard(m, locked)).join('')}`;
+  }).join('');
 
   const standings = calcGroupStandings(groupId, S.user.id);
   const standingsHtml = renderStandingsTable(standings, groupId);
@@ -938,7 +965,7 @@ function matchCard(m, locked) {
 
   return `
   <div class="match-card${locked ? ' locked' : ''}${result ? ' has-result' : ''}" id="mc-${m.id}">
-    <div class="match-label">Group ${m.group} · Round ${m.round}</div>
+    <div class="match-label">Group ${m.group}${m.date ? ` · ${fmtMatchDate(m.date)}` : ''}</div>
     <div class="match-row">
       <div class="team-side">
         ${flagImg(home, 'team-flag')}
@@ -1771,7 +1798,7 @@ function viewUserPredictions(userId) {
       }
       return `
       <tr>
-        <td>${flagImg(home)} ${home.name} vs ${flagImg(away)} ${away.name}</td>
+        <td>${flagImg(home)} ${home.name} vs ${flagImg(away)} ${away.name}${m.date ? `<div style="color:var(--text-sub);font-size:11px;margin-top:2px">${fmtMatchDate(m.date)}</div>` : ''}</td>
         <td><span class="pred-score ${cls}">${predTxt}</span></td>
         <td style="color:var(--text-sub)">${resTxt}</td>
         <td><span class="${cls}">${pts}</span></td>
@@ -2024,7 +2051,7 @@ function renderAdminResultGrid(groupId) {
     const home = WC.teams[m.home], away = WC.teams[m.away];
     return `
     <div class="result-entry-card">
-      <div class="result-entry-label">Group ${m.group} R${m.round} · ${flagImg(home)} vs ${flagImg(away)}</div>
+      <div class="result-entry-label">Group ${m.group}${m.date ? ` · ${fmtMatchDate(m.date)}` : ''} · ${flagImg(home)} vs ${flagImg(away)}</div>
       <div class="result-entry-row">
         <span>${home.name}</span>
         <input type="number" id="adm-${m.id}-home" value="${res.home ?? ''}" min="0" max="20"
@@ -2714,6 +2741,17 @@ function showToast(msg, type = 'info') {
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Format a match's absolute kickoff instant in Malaysia time (UTC+8).
+// e.g. "Thu 11 Jun, 03:00". Returns '' when no date is known.
+function fmtMatchDate(iso) {
+  if (!iso) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    weekday: 'short', day: 'numeric', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(iso));
 }
 
 function avatarHtml(user, size = 28) {

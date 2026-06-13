@@ -101,7 +101,7 @@ const WC = {
     thirdQualifier: 2,   // points per correctly predicted qualifying 3rd-placed team
     ko: { r32: 2, r16: 3, qf: 4, sf: 5, third: 3, final: 8 },
     bonus: {
-      winner: 10, runner_up: 5, golden_boot: 8, golden_ball: 5,
+      winner: 8, runner_up: 4, golden_boot: 5, golden_ball: 5,
       total_goals_3: 5, total_goals_8: 3, total_goals_15: 1,
       first_out: 3, top_scoring_team: 4
     }
@@ -120,7 +120,7 @@ const WC = {
     {
       id: "winner", emoji: "🏆",
       question: "Who will win the 2026 World Cup?",
-      type: "team", points: 10,
+      type: "team", points: 8,
       tip: "Spain (+450) · France (+550) · England (+650) · Brazil (+850) · Argentina (+850)",
       links: [
         { label: "Oddschecker",    url: "https://www.oddschecker.com/football/world-cup/winner" },
@@ -132,7 +132,7 @@ const WC = {
     {
       id: "runner_up", emoji: "🥈",
       question: "Who will be the runner-up (reach the Final)?",
-      type: "team", points: 5,
+      type: "team", points: 4,
       tip: "Which bracket half has the weaker route to the final? Big teams on opposite sides increases your odds.",
       links: [
         { label: "Bracket analysis – Rotowire", url: "https://www.rotowire.com/soccer/article/2026-world-cup-group-previews-lineups-odds-predictions-and-tactics-for-all-12-groups-111248" },
@@ -142,7 +142,7 @@ const WC = {
     {
       id: "golden_boot", emoji: "👟",
       question: "Who wins the Golden Boot (top scorer)?",
-      type: "player", points: 8,
+      type: "player", points: 5,
       tip: "Mbappé (+650) · Kane (+700) · Messi (+1200) · Haaland (+1400) · Yamal (+1800)",
       links: [
         { label: "Top scorer odds – NBC Sports",  url: "https://www.nbcsports.com/soccer/news/betting-odds-for-2026-world-cup-who-are-the-favorites-dark-horses-top-scorers" },
@@ -192,6 +192,27 @@ const WC = {
   ],
 };
 
+// Official FIFA 2026 group-stage kickoff times, keyed by this app's match id
+// (group letter + pairing index). Each value is an absolute instant including
+// the venue's UTC offset, sourced from FIFA's published schedule (via the
+// Wikipedia group pages, mapped by team pairing). NOTE: the app's R1/R2/R3
+// pairing order does NOT match FIFA's real matchdays, so the UI sorts by these
+// timestamps rather than by `round`.
+const MATCH_SCHEDULE = {
+  A1: "2026-06-11T13:00:00-06:00", A2: "2026-06-11T20:00:00-06:00", A3: "2026-06-18T19:00:00-06:00", A4: "2026-06-18T12:00:00-04:00", A5: "2026-06-24T19:00:00-06:00", A6: "2026-06-24T19:00:00-06:00",
+  B1: "2026-06-24T12:00:00-07:00", B2: "2026-06-24T12:00:00-07:00", B3: "2026-06-18T15:00:00-07:00", B4: "2026-06-18T12:00:00-07:00", B5: "2026-06-12T15:00:00-04:00", B6: "2026-06-13T12:00:00-07:00",
+  C1: "2026-06-13T18:00:00-04:00", C2: "2026-06-13T21:00:00-04:00", C3: "2026-06-19T20:30:00-04:00", C4: "2026-06-19T18:00:00-04:00", C5: "2026-06-24T18:00:00-04:00", C6: "2026-06-24T18:00:00-04:00",
+  D1: "2026-06-12T18:00:00-07:00", D2: "2026-06-13T21:00:00-07:00", D3: "2026-06-19T12:00:00-07:00", D4: "2026-06-19T20:00:00-07:00", D5: "2026-06-25T19:00:00-07:00", D6: "2026-06-25T19:00:00-07:00",
+  E1: "2026-06-14T12:00:00-05:00", E2: "2026-06-14T19:00:00-04:00", E3: "2026-06-20T16:00:00-04:00", E4: "2026-06-20T19:00:00-05:00", E5: "2026-06-25T16:00:00-04:00", E6: "2026-06-25T16:00:00-04:00",
+  F1: "2026-06-14T15:00:00-05:00", F2: "2026-06-14T20:00:00-06:00", F3: "2026-06-25T18:00:00-05:00", F4: "2026-06-25T18:00:00-05:00", F5: "2026-06-20T12:00:00-05:00", F6: "2026-06-20T22:00:00-06:00",
+  G1: "2026-06-15T12:00:00-07:00", G2: "2026-06-15T18:00:00-07:00", G3: "2026-06-21T12:00:00-07:00", G4: "2026-06-21T18:00:00-07:00", G5: "2026-06-26T20:00:00-07:00", G6: "2026-06-26T20:00:00-07:00",
+  H1: "2026-06-15T12:00:00-04:00", H2: "2026-06-15T18:00:00-04:00", H3: "2026-06-21T12:00:00-04:00", H4: "2026-06-21T18:00:00-04:00", H5: "2026-06-26T18:00:00-06:00", H6: "2026-06-26T19:00:00-05:00",
+  I1: "2026-06-16T15:00:00-04:00", I2: "2026-06-16T18:00:00-04:00", I3: "2026-06-26T15:00:00-04:00", I4: "2026-06-26T15:00:00-04:00", I5: "2026-06-22T17:00:00-04:00", I6: "2026-06-22T20:00:00-04:00",
+  J1: "2026-06-16T20:00:00-05:00", J2: "2026-06-16T21:00:00-07:00", J3: "2026-06-22T12:00:00-05:00", J4: "2026-06-22T20:00:00-07:00", J5: "2026-06-27T21:00:00-05:00", J6: "2026-06-27T21:00:00-05:00",
+  K1: "2026-06-23T12:00:00-05:00", K2: "2026-06-23T20:00:00-06:00", K3: "2026-06-27T19:30:00-04:00", K4: "2026-06-27T19:30:00-04:00", K5: "2026-06-17T12:00:00-05:00", K6: "2026-06-17T20:00:00-06:00",
+  L1: "2026-06-17T15:00:00-05:00", L2: "2026-06-17T19:00:00-04:00", L3: "2026-06-23T16:00:00-04:00", L4: "2026-06-23T19:00:00-04:00", L5: "2026-06-27T17:00:00-04:00", L6: "2026-06-27T17:00:00-04:00",
+};
+
 // Generate all 72 group stage matches
 (() => {
   // Standard FIFA group-stage pairing order: R1=[0v1,2v3] R2=[0v2,1v3] R3=[0v3,1v2]
@@ -203,12 +224,14 @@ const WC = {
 
   WC.groups.forEach(g => {
     pairings.forEach(([i, j], idx) => {
+      const id = `${g.id}${idx + 1}`;
       const m = {
-        id:    `${g.id}${idx + 1}`,
+        id,
         group: g.id,
         round: rounds[idx],
         home:  g.teams[i],
         away:  g.teams[j],
+        date:  MATCH_SCHEDULE[id] || null,   // absolute kickoff instant (with offset)
       };
       WC.matches.push(m);
       WC.matchById[m.id] = m;
@@ -243,10 +266,13 @@ const WC = {
     "Ismaïla Sarr","Krépin Diatta","Kalidou Koulibaly","Idrissa Gana Gueye",
   ].sort();
 
-  // Matches per group lookup
+  // Matches per group lookup — sorted by real kickoff time (chronological),
+  // since the app's pairing-based round order doesn't match FIFA's matchdays.
   WC.matchesByGroup = {};
   WC.groups.forEach(g => {
-    WC.matchesByGroup[g.id] = WC.matches.filter(m => m.group === g.id);
+    WC.matchesByGroup[g.id] = WC.matches
+      .filter(m => m.group === g.id)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
   });
 })();
 // Official FIFA 2026 third-place allocation (Annex C of tournament regulations).
