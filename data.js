@@ -15,7 +15,7 @@ const WC = {
   // Zambia (CAT), so these are the same instant for everyone. KO rounds carry
   // their own `lockDate` on each WC.koRounds entry below.
   groupLockDate: "2026-06-11T17:00:00+02:00", // first group match kickoff
-  bonusLockDate: "2026-06-13T12:00:00+02:00",
+  bonusLockDate: "2026-06-16T23:59:00+02:00", // Tue 16 Jun end of day
 
   teams: {
     // Group A
@@ -108,12 +108,12 @@ const WC = {
   },
 
   koRounds: [
-    { id: "r32",   name: "Round of 32",    short: "R32", matches: 16, pts: 2, lockDate: "2026-06-28", startMatch: 73  },
-    { id: "r16",   name: "Round of 16",    short: "R16", matches: 8,  pts: 3, lockDate: "2026-07-05", startMatch: 89  },
-    { id: "qf",    name: "Quarter-Finals", short: "QF",  matches: 4,  pts: 4, lockDate: "2026-07-10", startMatch: 97  },
-    { id: "sf",    name: "Semi-Finals",    short: "SF",  matches: 2,  pts: 5, lockDate: "2026-07-14", startMatch: 101 },
-    { id: "third", name: "3rd Place",      short: "3rd", matches: 1,  pts: 3, lockDate: "2026-07-18", startMatch: 103 },
-    { id: "final", name: "Final",          short: "F",   matches: 1,  pts: 8, lockDate: "2026-07-19", startMatch: 104 },
+    { id: "r32",   name: "Round of 32",    short: "R32", matches: 16, pts: 2, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 73  },
+    { id: "r16",   name: "Round of 16",    short: "R16", matches: 8,  pts: 3, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 89  },
+    { id: "qf",    name: "Quarter-Finals", short: "QF",  matches: 4,  pts: 4, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 97  },
+    { id: "sf",    name: "Semi-Finals",    short: "SF",  matches: 2,  pts: 5, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 101 },
+    { id: "third", name: "3rd Place",      short: "3rd", matches: 1,  pts: 3, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 103 },
+    { id: "final", name: "Final",          short: "F",   matches: 1,  pts: 8, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 104 },
   ],
 
   bonusQuestions: [
