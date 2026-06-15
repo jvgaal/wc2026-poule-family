@@ -1472,25 +1472,38 @@ function applyThirdSlots() {
       slot[side] = team;
       if (slot.winner && slot.winner !== slot.home && slot.winner !== slot.away) slot.winner = '';
     }
+    // A 3rd-placed team is authoritative. If the player also picked it as a
+    // group seed elsewhere, clear that conflicting seed so no team is twice in R32.
+    if (team) {
+      S.koPredictions.r32.forEach((sl, j) => {
+        if (!sl || (j === i)) return;
+        const pr = R32_PAIRINGS[j];
+        ['home', 'away'].forEach(sd => {
+          if (pr && pr[sd]?.groups) return;   // only clear group-seed sides
+          if (sl[sd] === team) {
+            sl[sd] = '';
+            if (sl.winner === team) sl.winner = '';
+          }
+        });
+      });
+    }
   });
 }
 
-// Team codes the player has placed in R32 group-seed slots (group winner /
-// runner-up dropdowns), skipping the one slot/side being edited. Auto-placed
-// 3rd-place sides are excluded, so the rule only blocks the same team being
-// chosen as two different group seeds (e.g. a team as both E#1 and E#2).
-function r32SeedTeamsInUse(exceptIdx, exceptSide) {
-  const used = new Set();
-  (S.koPredictions.r32 || []).forEach((slot, i) => {
-    if (!slot) return;
+// Where a team already sits in the R32 (other than the slot/side being edited),
+// covering BOTH group-seed sides and auto-placed 3rd-place sides. Used to stop
+// any team appearing twice in the Round of 32. Returns {idx, side, isThird} or null.
+function findR32Placement(teamCode, exceptIdx, exceptSide) {
+  const r32 = S.koPredictions.r32 || [];
+  for (let i = 0; i < r32.length; i++) {
     const pair = R32_PAIRINGS[i];
-    ['home', 'away'].forEach(side => {
-      if (i === exceptIdx && side === exceptSide) return;
-      if (pair && pair[side]?.groups) return;   // skip auto 3rd-place sides
-      if (slot[side]) used.add(slot[side]);
-    });
-  });
-  return used;
+    for (const side of ['home', 'away']) {
+      if (i === exceptIdx && side === exceptSide) continue;
+      if (r32[i]?.[side] === teamCode)
+        return { idx: i, side, isThird: !!(pair && pair[side]?.groups) };
+    }
+  }
+  return null;
 }
 
 function bktCard(roundId, idx, hasSelects, locked) {
@@ -1587,11 +1600,18 @@ function quickPickWinner(roundId, idx, teamCode) {
 
 function setKoTeam(roundId, idx, side, teamCode) {
   if (!S.koPredictions[roundId]) return;
-  // A team can't be picked as two different group seeds in the R32.
-  if (roundId === 'r32' && teamCode && r32SeedTeamsInUse(idx, side).has(teamCode)) {
-    showToast(`${WC.teams[teamCode]?.name || teamCode} is already one of your Round-of-32 picks`, 'error');
-    renderBracket();   // revert the dropdown to its previous value
-    return;
+  // No team may appear twice in the R32 — neither as two group seeds, nor as a
+  // group seed while it also qualifies as a 3rd-placed team.
+  if (roundId === 'r32' && teamCode) {
+    const clash = findR32Placement(teamCode, idx, side);
+    if (clash) {
+      const nm = WC.teams[teamCode]?.name || teamCode;
+      showToast(clash.isThird
+        ? `${nm} already qualifies as a 3rd-placed team — it can't also be a group #1 or #2`
+        : `${nm} is already one of your Round-of-32 picks`, 'error');
+      renderBracket();   // revert the dropdown to its previous value
+      return;
+    }
   }
   S.koPredictions[roundId][idx][side] = teamCode;
   S.koPredictions[roundId][idx].winner = '';
