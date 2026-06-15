@@ -1475,15 +1475,18 @@ function applyThirdSlots() {
   });
 }
 
-// Team codes already placed somewhere in the R32 (both seed picks and the
-// auto-placed 3rd-place qualifiers), skipping one slot/side being edited. Used
-// to keep any single team from appearing in two Round-of-32 matches.
-function r32TeamsInUse(exceptIdx, exceptSide) {
+// Team codes the player has placed in R32 group-seed slots (group winner /
+// runner-up dropdowns), skipping the one slot/side being edited. Auto-placed
+// 3rd-place sides are excluded, so the rule only blocks the same team being
+// chosen as two different group seeds (e.g. a team as both E#1 and E#2).
+function r32SeedTeamsInUse(exceptIdx, exceptSide) {
   const used = new Set();
   (S.koPredictions.r32 || []).forEach((slot, i) => {
     if (!slot) return;
+    const pair = R32_PAIRINGS[i];
     ['home', 'away'].forEach(side => {
       if (i === exceptIdx && side === exceptSide) return;
+      if (pair && pair[side]?.groups) return;   // skip auto 3rd-place sides
       if (slot[side]) used.add(slot[side]);
     });
   });
@@ -1528,9 +1531,7 @@ function bktCard(roundId, idx, hasSelects, locked) {
           const spec = sideSpec(side, getQualifierGroupsForR32(idx));
           if (spec && !spec.groups) {
             const groupData = WC.groups.find(g => g.id === spec.group);
-            const used = r32TeamsInUse(idx, side);   // no team twice in the R32
             options = (groupData?.teams || [])
-              .filter(code => code === slot[side] || !used.has(code))
               .map(code => {
                 const t = WC.teams[code];
                 const selected = slot[side] === code ? ' selected' : '';
@@ -1586,9 +1587,9 @@ function quickPickWinner(roundId, idx, teamCode) {
 
 function setKoTeam(roundId, idx, side, teamCode) {
   if (!S.koPredictions[roundId]) return;
-  // No team may appear in two Round-of-32 matches.
-  if (roundId === 'r32' && teamCode && r32TeamsInUse(idx, side).has(teamCode)) {
-    showToast(`${WC.teams[teamCode]?.name || teamCode} is already in another Round-of-32 match`, 'error');
+  // A team can't be picked as two different group seeds in the R32.
+  if (roundId === 'r32' && teamCode && r32SeedTeamsInUse(idx, side).has(teamCode)) {
+    showToast(`${WC.teams[teamCode]?.name || teamCode} is already one of your Round-of-32 picks`, 'error');
     renderBracket();   // revert the dropdown to its previous value
     return;
   }
