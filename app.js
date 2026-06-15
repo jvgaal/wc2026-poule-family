@@ -214,6 +214,18 @@ function saveLocal() {
   localStorage.setItem('wc26_config',  JSON.stringify(S.config));
 }
 
+// Wipe this device's prediction state — used on sign-out and before switching
+// identity, so one account never inherits or overwrites another's picks.
+// Leaves shared results/config alone (those are global, not per-user).
+function clearLocalPredictions() {
+  S.predictions      = {};
+  S.bonusPredictions = {};
+  S.koPredictions    = {};
+  localStorage.removeItem('wc26_preds');
+  localStorage.removeItem('wc26_bonus');
+  localStorage.removeItem('wc26_ko');
+}
+
 // ══════════════════════════════════════════════════════
 //  PERSISTENCE — remote (Google Apps Script)
 // ══════════════════════════════════════════════════════
@@ -2512,6 +2524,7 @@ function signOut() {
   if (S.user?.id && S.user?.nickname) persistNickname(S.user.id, S.user.nickname);
   S.user = null;
   localStorage.removeItem('wc26_user');
+  clearLocalPredictions();   // don't leave this person's picks for the next login
   closeUserMenu();
   updateHeaderUser();
   syncAdminVisibility();
@@ -2715,6 +2728,11 @@ async function completeRosterLogin() {
   updateHeaderUser();
   syncAdminVisibility();
 
+  // Drop any picks left in this browser by a previous login — otherwise the
+  // fetchRemote() merge (which only hydrates when local is empty) would keep
+  // them and syncRemote() below would write them onto THIS account.
+  clearLocalPredictions();
+
   // Pull THIS account's saved predictions from the server BEFORE rendering or
   // saving, so a fresh device (phone, cleared cache) shows the existing picks
   // instead of blanks. fetchRemote() hydrates S.predictions when local is empty.
@@ -2830,12 +2848,25 @@ async function registerUser() {
   persistUserByName(name, S.user);
 
   persistNickname(S.user.id, S.user.nickname);
+
+  // Drop any picks left by a previous login in this browser, then hydrate THIS
+  // account from the server before saving — so we never overwrite a populated
+  // server row with the previous person's (or an empty) payload.
+  clearLocalPredictions();
   saveLocal();
   closeModal();
   updateHeaderUser();
   syncAdminVisibility();
-  syncRemote();
+  await fetchRemote();
   renderActiveView();
+
+  // Safe-sync: only write back once we actually have picks (hydrated above or
+  // entered locally) — never push an all-empty payload over a good server row.
+  const hasPicks = Object.keys(S.predictions).length
+                || Object.keys(S.koPredictions).length
+                || Object.keys(S.bonusPredictions).length;
+  if (hasPicks) syncRemote();
+
   showToast(`Welcome${existing ? ' back' : ''}, ${S.user.nickname}! 🎉`, 'success');
 }
 
