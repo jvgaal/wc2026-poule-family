@@ -1171,7 +1171,7 @@ function renderBracket() {
 // groups qualify. The chosen set drives the bracket's 3rd-place slots.
 function renderThirdsPanel() {
   if (!S.user) return '';
-  const { ranked, qualifyingGroups, auto } = effectiveThirds(S.user.id);
+  const { ranked, qualifyingGroups, auto, complete, overridden } = effectiveThirds(S.user.id);
   if (ranked.length < 12) {
     return `<div class="tp-panel tp-panel-empty">
       <div class="tp-head"><span class="tp-title">🥉 3rd-place qualifiers</span></div>
@@ -1179,7 +1179,6 @@ function renderThirdsPanel() {
     </div>`;
   }
   const qSet = new Set(qualifyingGroups);
-  const overridden = !!getThirdOverride(S.user.id);
   const sameAsAuto = JSON.stringify([...qSet].sort()) === JSON.stringify([...auto].sort());
 
   const rows = ranked.map((t, i) => {
@@ -1196,36 +1195,39 @@ function renderThirdsPanel() {
       </button>`;
   }).join('');
 
+  const need = 8 - qSet.size;
+  const note = complete
+    ? `The 8 best third-placed teams reach the Round of 32. Click any team to add or remove it freely — they're placed into the bracket automatically (official FIFA rules).`
+    : `Pick ${need} more — the bracket's 3rd-place slots fill once you've chosen 8.`;
+
   return `<div class="tp-panel">
     <div class="tp-head">
-      <span class="tp-title">🥉 3rd-place qualifiers <span class="tp-count">${qSet.size}/8</span></span>
+      <span class="tp-title">🥉 3rd-place qualifiers <span class="tp-count${complete ? '' : ' tp-count-warn'}">${qSet.size}/8</span></span>
       <span class="tp-sub">${overridden && !sameAsAuto ? 'Custom picks' : 'Auto from your group tables'}</span>
       ${overridden ? `<button class="btn btn-ghost btn-sm tp-reset" onclick="resetThirdPicks()">↺ Reset to auto</button>` : ''}
     </div>
-    <div class="tp-note">The 8 best third-placed teams reach the Round of 32. Click a team to swap it in or out — they're placed into the bracket automatically (official FIFA rules).</div>
+    <div class="tp-note">${note}</div>
     <div class="tp-grid">${rows}</div>
   </div>`;
 }
 
-// Toggle a group's 3rd-placed team in/out of the qualifying 8, keeping exactly 8
-// by swapping with the nearest-ranked team on the other side.
+// Free toggle: add or remove a group's 3rd-placed team independently. The
+// player controls exactly which 8 qualify — partial selections (0–8) are held,
+// and the bracket only fills its 3rd-place slots once 8 are chosen.
 function toggleThirdPick(group) {
-  const { ranked, qualifyingGroups } = effectiveThirds(S.user.id);
-  const order = ranked.map(t => t.group);                 // best → worst
+  const { qualifyingGroups } = effectiveThirds(S.user.id);
   const cur = new Set(qualifyingGroups);
   if (cur.has(group)) {
-    // Drop this team; promote the highest-ranked team currently out.
-    const promote = order.find(g => !cur.has(g));
-    if (!promote) return;
-    cur.delete(group); cur.add(promote);
+    cur.delete(group);                       // drop — allowed down to 0
   } else {
-    // Add this team; demote the lowest-ranked team currently in.
-    const demote = [...order].reverse().find(g => cur.has(g));
-    if (!demote) return;
-    cur.add(group); cur.delete(demote);
+    if (cur.size >= 8) {                      // soft cap — let the player pick which to drop
+      showToast('You already have 8 — drop one first', 'info');
+      return;
+    }
+    cur.add(group);
   }
   setThirdOverride([...cur]);
-  cascadeWinners();   // re-place thirds in the bracket
+  cascadeWinners();   // re-place thirds in the bracket (blank until 8 chosen)
   debouncedSave();
   renderBracket();
 }
@@ -1426,10 +1428,10 @@ function getThirdOverride(userId) {
   const isSelf = S.user && userId === S.user.id;
   const ko = isSelf ? S.koPredictions : (S.allPredictions[userId]?.ko || {});
   const v = ko && ko._thirds;
-  return Array.isArray(v) && v.length === 8 ? v : null;
+  return Array.isArray(v) && v.length >= 1 && v.length <= 8 ? v : null;
 }
 function setThirdOverride(groups) {
-  if (groups && groups.length === 8) S.koPredictions._thirds = [...groups].sort();
+  if (groups && groups.length >= 1 && groups.length <= 8) S.koPredictions._thirds = [...groups].sort();
   else delete S.koPredictions._thirds;
 }
 
@@ -1442,19 +1444,24 @@ function effectiveThirds(userId) {
   const auto = ranked.slice(0, 8).map(t => t.group);
   let qualifyingGroups = auto;
   const ov = getThirdOverride(userId);
+  const overridden = !!ov;
   if (ov) {
-    const valid = ov.filter(g => thirdsByGroup[g]);
-    if (valid.length === 8) qualifyingGroups = valid;
+    // Keep the player's raw selection even when it isn't yet 8 — the bracket
+    // only fills its 3rd-place slots once `complete` is true (see applyThirdSlots).
+    qualifyingGroups = ov.filter(g => thirdsByGroup[g]);
   }
-  return { ranked, thirdsByGroup, qualifyingGroups, auto };
+  const complete = qualifyingGroups.length === 8;
+  return { ranked, thirdsByGroup, qualifyingGroups, auto, complete, overridden };
 }
 
 // Write the auto-resolved 3rd-place teams into the current user's R32 slots
 // (read-only in the UI). Clears a stale winner if its team is replaced.
 function applyThirdSlots() {
   if (!S.user || !S.koPredictions.r32) return;
-  const { thirdsByGroup, qualifyingGroups } = effectiveThirds(S.user.id);
-  const slots = resolveThirdSlots(thirdsByGroup, qualifyingGroups);
+  const { thirdsByGroup, qualifyingGroups, complete } = effectiveThirds(S.user.id);
+  // Only resolve via the official 495-row table when exactly 8 thirds are
+  // chosen; while the selection is incomplete, leave the 3rd-place sides blank.
+  const slots = complete ? resolveThirdSlots(thirdsByGroup, qualifyingGroups) : {};
   R32_PAIRINGS.forEach((pair, i) => {
     const side = pair.home.groups ? 'home' : (pair.away.groups ? 'away' : null);
     if (!side) return;
@@ -1466,6 +1473,21 @@ function applyThirdSlots() {
       if (slot.winner && slot.winner !== slot.home && slot.winner !== slot.away) slot.winner = '';
     }
   });
+}
+
+// Team codes already placed somewhere in the R32 (both seed picks and the
+// auto-placed 3rd-place qualifiers), skipping one slot/side being edited. Used
+// to keep any single team from appearing in two Round-of-32 matches.
+function r32TeamsInUse(exceptIdx, exceptSide) {
+  const used = new Set();
+  (S.koPredictions.r32 || []).forEach((slot, i) => {
+    if (!slot) return;
+    ['home', 'away'].forEach(side => {
+      if (i === exceptIdx && side === exceptSide) return;
+      if (slot[side]) used.add(slot[side]);
+    });
+  });
+  return used;
 }
 
 function bktCard(roundId, idx, hasSelects, locked) {
@@ -1506,7 +1528,9 @@ function bktCard(roundId, idx, hasSelects, locked) {
           const spec = sideSpec(side, getQualifierGroupsForR32(idx));
           if (spec && !spec.groups) {
             const groupData = WC.groups.find(g => g.id === spec.group);
+            const used = r32TeamsInUse(idx, side);   // no team twice in the R32
             options = (groupData?.teams || [])
+              .filter(code => code === slot[side] || !used.has(code))
               .map(code => {
                 const t = WC.teams[code];
                 const selected = slot[side] === code ? ' selected' : '';
@@ -1562,6 +1586,12 @@ function quickPickWinner(roundId, idx, teamCode) {
 
 function setKoTeam(roundId, idx, side, teamCode) {
   if (!S.koPredictions[roundId]) return;
+  // No team may appear in two Round-of-32 matches.
+  if (roundId === 'r32' && teamCode && r32TeamsInUse(idx, side).has(teamCode)) {
+    showToast(`${WC.teams[teamCode]?.name || teamCode} is already in another Round-of-32 match`, 'error');
+    renderBracket();   // revert the dropdown to its previous value
+    return;
+  }
   S.koPredictions[roundId][idx][side] = teamCode;
   S.koPredictions[roundId][idx].winner = '';
   cascadeWinners();

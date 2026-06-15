@@ -1260,6 +1260,7 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
   padding: 1px 8px;
   margin-left: 4px;
 }
+.tp-count-warn { background: #e0a000; color: #1a1206; }
 .tp-sub { font-size: 12px; color: var(--text-dim); }
 .tp-reset { margin-left: auto; }
 .tp-note { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; max-width: 720px; }
