@@ -253,6 +253,27 @@ html[data-theme="dark"] .nav-tab.active { color: var(--green); background: var(-
 .save-status.saved  { color: var(--green); }
 .save-status.error  { color: var(--red); }
 
+/* Header completion badge + leaderboard completion chip */
+.completion-badge {
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.completion-badge.is-complete   { background: var(--green); color: #14201a; }
+.completion-badge.is-incomplete { background: #e0a000; color: #1a1206; }
+
+.lb-complete {
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+.lb-complete.is-complete   { background: var(--green); color: #14201a; }
+.lb-complete.is-incomplete { background: #e0a000; color: #1a1206; }
+
 #user-btn {
   display: flex;
   align-items: center;

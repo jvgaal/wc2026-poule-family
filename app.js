@@ -366,6 +366,7 @@ async function syncRemoteConfig() {
 }
 
 function debouncedSave() {
+  refreshCompletionBadge();
   setStatus('saving');
   clearTimeout(S.saveTimer);
   S.saveTimer = setTimeout(() => {
@@ -501,6 +502,7 @@ function bindSubTabs() {
 }
 
 function renderActiveView() {
+  refreshCompletionBadge();
   switch (S.activeTab) {
     case 'leaderboard':  renderLeaderboard(); break;
     case 'predictions':  renderActiveSub();   break;
@@ -598,6 +600,91 @@ function countFilled(userId) {
     const p = preds[m.id];
     return p && p.home !== undefined && p.away !== undefined;
   }).length;
+}
+
+// Overall prediction completeness across all three areas: group scores,
+// knockout bracket (a KO match counts only with BOTH scores + a winner) and
+// bonus questions. Works for self or any other user.
+function completionStatus(userId) {
+  const isSelf = S.user && userId === S.user.id;
+  const gPreds = isSelf ? S.predictions      : (S.allPredictions[userId]?.group || {});
+  const ko     = isSelf ? S.koPredictions    : (S.allPredictions[userId]?.ko    || {});
+  const bonus  = isSelf ? S.bonusPredictions : (S.allPredictions[userId]?.bonus || {});
+  const set = v => v !== undefined && v !== null && v !== '';
+
+  const groupTotal = WC.matches.length;
+  const groupDone  = WC.matches.filter(m => {
+    const p = gPreds[m.id];
+    return p && set(p.home) && set(p.away);
+  }).length;
+
+  let koTotal = 0, koDone = 0;
+  WC.koRounds.forEach(r => {
+    koTotal += r.matches;
+    const arr = ko[r.id] || [];
+    for (let i = 0; i < r.matches; i++) {
+      const s = arr[i];
+      if (s && set(s.winner) && set(s.hScore) && set(s.aScore)) koDone++;
+    }
+  });
+
+  const bonusTotal = WC.bonusQuestions.length;
+  const bonusDone  = WC.bonusQuestions.filter(q => set(bonus[q.id])).length;
+
+  const done  = groupDone + koDone + bonusDone;
+  const total = groupTotal + koTotal + bonusTotal;
+  return {
+    group: { done: groupDone, total: groupTotal },
+    ko:    { done: koDone,    total: koTotal },
+    bonus: { done: bonusDone, total: bonusTotal },
+    done, total,
+    pct: Math.round((done / total) * 100),
+    complete: done === total
+  };
+}
+
+// One-line breakdown for tooltips, e.g. "Group 72/72 · KO 30/32 · Bonus 7/7".
+function completionBreakdown(c) {
+  return `Group ${c.group.done}/${c.group.total} · KO ${c.ko.done}/${c.ko.total} · Bonus ${c.bonus.done}/${c.bonus.total}`;
+}
+
+// Update the header completion badge for the logged-in user.
+function refreshCompletionBadge() {
+  const el = document.getElementById('completion-badge');
+  if (!el) return;
+  if (!S.user) { el.style.display = 'none'; return; }
+  const c = completionStatus(S.user.id);
+  el.style.display = '';
+  el.classList.toggle('is-complete', c.complete);
+  el.classList.toggle('is-incomplete', !c.complete);
+  el.textContent = c.complete ? '✓ Complete' : `⚠ ${c.pct}%`;
+  el.title = c.complete
+    ? `All predictions complete — ${completionBreakdown(c)}`
+    : `${c.total - c.done} prediction(s) left — ${completionBreakdown(c)}`;
+}
+
+// Clicking the badge: jump to the first unfinished area (or celebrate if done).
+function onCompletionBadgeClick() {
+  if (!S.user) return;
+  const c = completionStatus(S.user.id);
+  if (c.complete) { showToast('🎉 All your predictions are in — you\'re 100% complete!', 'success'); return; }
+  const goSub = (sub) => {
+    S.activeSub = sub;
+    switchTab('predictions');
+    document.querySelectorAll('.sub-tab').forEach(b => b.classList.toggle('active', b.dataset.sub === sub));
+    document.querySelectorAll('.sub-view').forEach(v => v.classList.toggle('active', v.id === `sub-${sub}`));
+    renderActiveSub();
+  };
+  if (c.group.done < c.group.total) {
+    showToast(`Group stage: ${c.group.done}/${c.group.total} matches filled`, 'info');
+    goSub('group');
+  } else if (c.ko.done < c.ko.total) {
+    showToast(`Knockout: ${c.ko.done}/${c.ko.total} matches need a score + winner`, 'info');
+    goSub('knockout');
+  } else {
+    showToast(`Bonus: ${c.bonus.done}/${c.bonus.total} questions answered`, 'info');
+    switchTab('bonus');
+  }
 }
 
 function calcGroupStandings(groupId, userId) {
@@ -774,8 +861,9 @@ function renderLeaderboard() {
   const ranked = [...allUserIds].map(id => {
     const score  = calcScore(id);
     const filled = countFilled(id);
-    return { ...getUserObj(id), score, filled };
-  }).sort((a, b) => b.score.total - a.score.total || b.filled - a.filled);
+    const comp   = completionStatus(id);
+    return { ...getUserObj(id), score, filled, comp };
+  }).sort((a, b) => b.score.total - a.score.total || b.comp.done - a.comp.done);
 
   // Per-photo crop tuning — the source photos are themed full-scene shots
   // with faces at very different sizes/positions, so zoom + shift each one to
@@ -858,7 +946,7 @@ function renderLeaderboard() {
       </div>
       <div>
         <div class="lb-bar-wrap"><div class="lb-bar" style="width:${barW}%"></div></div>
-        <div class="lb-sub" style="text-align:right;margin-top:3px">${u.filled}/72 filled</div>
+        <div class="lb-sub" style="text-align:right;margin-top:3px"><span class="lb-complete ${u.comp.complete ? 'is-complete' : 'is-incomplete'}" title="${completionBreakdown(u.comp)}">${u.comp.complete ? '✓ 100%' : `⚠ ${u.comp.pct}%`}</span></div>
       </div>
       <div class="lb-pts">${u.score.total} pts</div>
     </div>`;
@@ -1811,7 +1899,7 @@ function renderUserGrid(filter) {
       ${avatarHtml(u, 32)}
       <div class="browse-user-info">
         <div class="browse-user-name">${esc(displayName(u))}${isMe ? ' (you)' : ''}</div>
-        <div class="browse-user-pts">${score.total} pts · ${countFilled(u.id)}/72</div>
+        <div class="browse-user-pts">${score.total} pts · ${completionStatus(u.id).pct}% done</div>
       </div>
     </div>`;
   }).join('');
@@ -1878,7 +1966,7 @@ function viewUserPredictions(userId) {
       ${avatarHtml(user, 40)}
       <div>
         <div style="font-size:18px;font-weight:700">${esc(displayName(user))}</div>
-        <div style="color:var(--text-sub);font-size:13px">${score.total} pts · ${countFilled(userId)}/72 matches filled</div>
+        <div style="color:var(--text-sub);font-size:13px">${score.total} pts · ${(() => { const c = completionStatus(userId); return c.complete ? '✓ 100% complete' : `${c.pct}% complete`; })()}</div>
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeBrowseDetail()">✕ Close</button>
     </div>
@@ -2772,6 +2860,7 @@ function updateHeaderUser() {
     }
   }
   if (nm) nm.textContent = displayName(S.user);
+  refreshCompletionBadge();
 }
 
 // ══════════════════════════════════════════════════════
