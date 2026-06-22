@@ -561,13 +561,15 @@ function calcScore(userId) {
     rResults.forEach((res, i) => {
       if (!res?.winner) return;
       const pred = rPreds[i] || {};
-      // Exact score (both home and away match) = bonus points on top of winner points
+      // Must pick the correct winning TEAM first — no points for the right
+      // scoreline between teams you never predicted at this slot.
+      if (pred.winner !== res.winner) return;
+      koPts += round.pts; // winner points
+      // Exact scoreline adds a bonus, but only now that the winner is correct.
       if (res.home !== '' && res.away !== '' &&
           pred.hScore !== '' && pred.aScore !== '' &&
           +pred.hScore === res.home && +pred.aScore === res.away) {
-        koPts += round.pts + WC.scoring.groupExact; // winner + exact bonus
-      } else if (pred.winner === res.winner) {
-        koPts += round.pts; // winner only
+        koPts += WC.scoring.groupExact;
       }
     });
   });
