@@ -1235,10 +1235,13 @@ function renderBracket() {
        ${Array.from({length: to-from}, (_, i) => bktCard(roundId, from+i, hasSelects, lkd(roundId))).join('')}
      </div>`;
 
+  const r32Locked = isRoundLocked('r32');
   document.getElementById('ko-content').innerHTML = `
     <div class="bkt-toolbar">
-      <button class="btn btn-ghost btn-sm" onclick="autoFillKo()">⚡ Auto-fill R32 from groups</button>
-      <span class="bkt-hint">Pick winners — they cascade through the bracket automatically</span>
+      ${r32Locked
+        ? `<span class="bkt-hint">🔒 Bracket locked — predictions can no longer be changed.</span>`
+        : `<button class="btn btn-ghost btn-sm" onclick="autoFillKo()">⚡ Auto-fill R32 from groups</button>
+           <span class="bkt-hint">Pick winners — they cascade through the bracket automatically</span>`}
     </div>
     ${renderThirdsPanel()}
     <div class="bkt-scroll">
@@ -1275,10 +1278,12 @@ function renderBracket() {
     });
   });
 
-  // Bind 3rd-place qualifier chips
-  document.getElementById('ko-content').querySelectorAll('.tp-chip[data-group]').forEach(chip => {
-    chip.addEventListener('click', () => toggleThirdPick(chip.dataset.group));
-  });
+  // Bind 3rd-place qualifier chips (only while the R32 round is still open)
+  if (!isRoundLocked('r32')) {
+    document.getElementById('ko-content').querySelectorAll('.tp-chip[data-group]').forEach(chip => {
+      chip.addEventListener('click', () => toggleThirdPick(chip.dataset.group));
+    });
+  }
 
   // Auto-scale to fit viewport (no scrollbar)
   fitBracket();
@@ -1296,14 +1301,20 @@ function renderThirdsPanel() {
       <div class="tp-note">Fill in all 12 group tables to rank the third-placed teams. The best 8 qualify automatically.</div>
     </div>`;
   }
+  // The 3rd-place selection decides who enters the Round of 32, so it locks with
+  // the R32 round. Once locked the chips become read-only — no toggling, no reset.
+  const locked = isRoundLocked('r32');
   const qSet = new Set(qualifyingGroups);
   const sameAsAuto = JSON.stringify([...qSet].sort()) === JSON.stringify([...auto].sort());
 
   const rows = ranked.map((t, i) => {
     const team = WC.teams[t.code];
     const inQ = qSet.has(t.group);
-    return `<button type="button" class="tp-chip${inQ ? ' tp-in' : ' tp-out'}" data-group="${t.group}"
-              title="${inQ ? 'Qualifies — click to drop' : 'Out — click to qualify'}">
+    const title = locked
+      ? (inQ ? 'Qualified as a best third' : 'Did not qualify')
+      : (inQ ? 'Qualifies — click to drop' : 'Out — click to qualify');
+    return `<button type="button" class="tp-chip${inQ ? ' tp-in' : ' tp-out'}${locked ? ' tp-locked' : ''}" data-group="${t.group}"${locked ? ' disabled' : ''}
+              title="${title}">
         <span class="tp-rank">${i + 1}</span>
         ${flagImg(team, 'tp-flag')}
         <span class="tp-name">${team.name}</span>
@@ -1314,15 +1325,17 @@ function renderThirdsPanel() {
   }).join('');
 
   const need = 8 - qSet.size;
-  const note = complete
-    ? `The 8 best third-placed teams reach the Round of 32. Click any team to add or remove it freely — they're placed into the bracket automatically (official FIFA rules).`
-    : `Pick ${need} more — the bracket's 3rd-place slots fill once you've chosen 8.`;
+  const note = locked
+    ? `🔒 Locked — third-place qualifiers can no longer be changed.`
+    : complete
+      ? `The 8 best third-placed teams reach the Round of 32. Click any team to add or remove it freely — they're placed into the bracket automatically (official FIFA rules).`
+      : `Pick ${need} more — the bracket's 3rd-place slots fill once you've chosen 8.`;
 
   return `<div class="tp-panel">
     <div class="tp-head">
-      <span class="tp-title">🥉 3rd-place qualifiers <span class="tp-count${complete ? '' : ' tp-count-warn'}">${qSet.size}/8</span></span>
+      <span class="tp-title">🥉 3rd-place qualifiers ${locked ? '🔒' : ''}<span class="tp-count${complete ? '' : ' tp-count-warn'}">${qSet.size}/8</span></span>
       <span class="tp-sub">${overridden && !sameAsAuto ? 'Custom picks' : 'Auto from your group tables'}</span>
-      ${overridden ? `<button class="btn btn-ghost btn-sm tp-reset" onclick="resetThirdPicks()">↺ Reset to auto</button>` : ''}
+      ${overridden && !locked ? `<button class="btn btn-ghost btn-sm tp-reset" onclick="resetThirdPicks()">↺ Reset to auto</button>` : ''}
     </div>
     <div class="tp-note">${note}</div>
     <div class="tp-grid">${rows}</div>
@@ -1333,6 +1346,7 @@ function renderThirdsPanel() {
 // player controls exactly which 8 qualify — partial selections (0–8) are held,
 // and the bracket only fills its 3rd-place slots once 8 are chosen.
 function toggleThirdPick(group) {
+  if (isRoundLocked('r32')) return;   // selection is frozen once R32 locks
   const { qualifyingGroups } = effectiveThirds(S.user.id);
   const cur = new Set(qualifyingGroups);
   if (cur.has(group)) {
@@ -1351,6 +1365,7 @@ function toggleThirdPick(group) {
 }
 
 function resetThirdPicks() {
+  if (isRoundLocked('r32')) return;   // selection is frozen once R32 locks
   setThirdOverride(null);
   cascadeWinners();
   debouncedSave();
@@ -1502,6 +1517,7 @@ function resultBktCard(roundId, idx) {
 }
 
 function setKoScore(roundId, idx, side, val) {
+  if (isRoundLocked(roundId)) return;
   if (!S.koPredictions[roundId]) return;
   S.koPredictions[roundId][idx][side] = val;
   debouncedSave();
@@ -1822,6 +1838,7 @@ function bktCard(roundId, idx, hasSelects, locked) {
 }
 
 function quickPickWinner(roundId, idx, teamCode) {
+  if (isRoundLocked(roundId)) return;
   if (!S.koPredictions[roundId]) return;
   S.koPredictions[roundId][idx].winner = teamCode;
   cascadeWinners();
@@ -1830,6 +1847,7 @@ function quickPickWinner(roundId, idx, teamCode) {
 }
 
 function setKoTeam(roundId, idx, side, teamCode) {
+  if (isRoundLocked(roundId)) return;
   if (!S.koPredictions[roundId]) return;
   // No team may appear twice in the R32 — neither as two group seeds, nor as a
   // group seed while it also qualifies as a 3rd-placed team.
@@ -1852,6 +1870,7 @@ function setKoTeam(roundId, idx, side, teamCode) {
 }
 
 function autoFillKo() {
+  if (isRoundLocked('r32')) return;   // bracket frozen after the R32 deadline
   // Warn if R32 winners are already picked
   const existingWinners = S.koPredictions.r32?.filter(m => m.winner).length || 0;
   if (existingWinners > 0) {

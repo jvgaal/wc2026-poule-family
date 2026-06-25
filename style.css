@@ -1340,6 +1340,10 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
   transition: all 0.15s;
 }
 .tp-chip:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+/* Locked: read-only after the R32 deadline — no hover lift, no pointer */
+.tp-chip.tp-locked { cursor: default; }
+.tp-chip.tp-locked:hover { border-color: var(--border); transform: none; }
+.tp-chip.tp-locked.tp-in:hover { border-color: rgba(125,194,66,0.55); }
 .tp-chip.tp-in {
   border-color: rgba(125,194,66,0.55);
   background: rgba(125,194,66,0.12);
