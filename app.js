@@ -518,6 +518,7 @@ function renderActiveView() {
   switch (S.activeTab) {
     case 'leaderboard':  renderLeaderboard(); break;
     case 'predictions':  renderActiveSub();   break;
+    case 'results':      renderResults();      break;
     case 'bonus':        renderBonus();        break;
     case 'browse':       renderBrowse();       break;
     case 'admin':        renderAdmin();        break;
@@ -533,6 +534,32 @@ function renderActiveSub() {
 // ══════════════════════════════════════════════════════
 //  SCORE CALCULATION ENGINE
 // ══════════════════════════════════════════════════════
+
+// Points a single knockout slot earns for a given player's KO predictions.
+// Single source of truth shared by calcScore (leaderboard) and the Results-tab
+// overlay, so the points shown next to a match always match the leaderboard.
+// `koPreds` is that player's ko-prediction blob (e.g. S.koPredictions).
+function koSlotPoints(roundId, idx, koPreds) {
+  const round = WC.koRounds.find(r => r.id === roundId);
+  const res   = (S.results[`ko_${roundId}`] || [])[idx];
+  const pred  = (koPreds?.[roundId] || [])[idx] || {};
+  const out = { pts: 0, correctWinner: false, exactScore: false, decided: !!res?.winner };
+  if (!round || !res?.winner) return out;
+  // Must pick the correct winning TEAM first — no points for the right
+  // scoreline between teams you never predicted at this slot.
+  if (pred.winner !== res.winner) return out;
+  out.correctWinner = true;
+  out.pts += round.pts; // winner points
+  // Exact scoreline adds a bonus, but only now that the winner is correct.
+  if (res.home !== '' && res.away !== '' && res.home != null && res.away != null &&
+      pred.hScore !== '' && pred.aScore !== '' && pred.hScore != null && pred.aScore != null &&
+      +pred.hScore === +res.home && +pred.aScore === +res.away) {
+    out.exactScore = true;
+    out.pts += WC.scoring.groupExact;
+  }
+  return out;
+}
+
 function calcScore(userId) {
   const isSelf = S.user && userId === S.user.id;
   const preds  = isSelf ? S.predictions      : (S.allPredictions[userId]?.group || {});
@@ -554,23 +581,12 @@ function calcScore(userId) {
     }
   });
 
-  // Knockout rounds
+  // Knockout rounds — scored per slot via the shared koSlotPoints helper so the
+  // Results-tab overlay can never show a different number than the leaderboard.
   WC.koRounds.forEach(round => {
     const rResults = S.results[`ko_${round.id}`] || [];
-    const rPreds   = ko[round.id]                || [];
     rResults.forEach((res, i) => {
-      if (!res?.winner) return;
-      const pred = rPreds[i] || {};
-      // Must pick the correct winning TEAM first — no points for the right
-      // scoreline between teams you never predicted at this slot.
-      if (pred.winner !== res.winner) return;
-      koPts += round.pts; // winner points
-      // Exact scoreline adds a bonus, but only now that the winner is correct.
-      if (res.home !== '' && res.away !== '' &&
-          pred.hScore !== '' && pred.aScore !== '' &&
-          +pred.hScore === res.home && +pred.aScore === res.away) {
-        koPts += WC.scoring.groupExact;
-      }
+      koPts += koSlotPoints(round.id, i, ko).pts;
     });
   });
 
@@ -1341,8 +1357,9 @@ function resetThirdPicks() {
   renderBracket();
 }
 
-function fitBracket() {
-  const wrap = document.querySelector('.bkt-scroll');
+function fitBracket(root) {
+  const scope = (root && root.querySelector) ? root : document;
+  const wrap = scope.querySelector('.bkt-scroll');
   const tree = wrap?.querySelector('.bkt-tree');
   if (!wrap || !tree) return;
   // Reset transforms before measuring
@@ -1370,7 +1387,119 @@ function fitBracket() {
 // Re-fit on window resize when knockout is visible
 window.addEventListener('resize', () => {
   if (S.activeTab === 'predictions' && S.activeSub === 'knockout') fitBracket();
+  if (S.activeTab === 'results') fitBracket(document.getElementById('results-content'));
 });
+
+// ══════════════════════════════════════════════════════
+//  RESULTS VIEW — official knockout bracket + your-picks overlay
+// ══════════════════════════════════════════════════════
+// Read-only bracket built from ACTUAL entered results (never anyone's
+// predictions): real qualified teams via resolveActualKoMatchups + real scores
+// from S.results. Each card is overlaid with the signed-in player's pick
+// outcome for that slot, using the shared koSlotPoints helper.
+function renderResults() {
+  const root = document.getElementById('results-content');
+  if (!root) return;
+
+  // Nothing entered at all yet — knockout simply hasn't started.
+  if (Object.keys(S.results).length === 0) {
+    root.innerHTML = `<div class="empty-state">
+      <div class="emoji">🏆</div>
+      <h3>Knockout hasn't started yet</h3>
+      <p>Once group results come in, the official bracket fills in here — real qualified teams, real matchups and scores, plus how your picks are doing.</p>
+    </div>`;
+    return;
+  }
+
+  const col = (roundId, from, to) => {
+    const r = WC.koRounds.find(x => x.id === roundId);
+    return `<div class="bkt-col" data-round="${roundId}">
+       <div class="bkt-col-hdr"><span class="bkt-col-name">${r.name}</span><span class="bkt-col-pts">+${r.pts}pts</span></div>
+       ${Array.from({length: to - from}, (_, i) => resultBktCard(roundId, from + i)).join('')}
+     </div>`;
+  };
+
+  const summary = S.user
+    ? `<div class="bkt-res-summary">Your knockout points so far: <strong>${calcScore(S.user.id).ko}</strong> <span class="bkt-res-summary-sub">· ✓ correct winners earn round points, ⚡ marks an exact scoreline bonus</span></div>`
+    : `<div class="bkt-res-summary">Sign in to see how your bracket picks scored.</div>`;
+
+  root.innerHTML = `
+    ${summary}
+    <div class="bkt-scroll">
+      <div class="bkt-tree">
+        ${col('r32', 0,  8)}
+        ${col('r16', 0,  4)}
+        ${col('qf',  0,  2)}
+        ${col('sf',  0,  1)}
+        <div class="bkt-center-col">
+          <div class="bkt-center-lbl">🏆 Final</div>
+          ${resultBktCard('final', 0)}
+          <div class="bkt-center-lbl" style="margin-top:20px">🥉 3rd Place</div>
+          ${resultBktCard('third', 0)}
+        </div>
+        ${col('sf',  1,  2)}
+        ${col('qf',  2,  4)}
+        ${col('r16', 4,  8)}
+        ${col('r32', 8, 16)}
+      </div>
+    </div>`;
+
+  fitBracket(root);
+}
+
+// One read-only result card: actual teams + final score, the winner highlighted,
+// plus the signed-in player's pick outcome for this slot.
+function resultBktCard(roundId, idx) {
+  const actual = resolveActualKoMatchups(roundId)[idx] || { home: '', away: '' };
+  const res    = (S.results[`ko_${roundId}`] || [])[idx] || {};
+  const h = actual.home ? WC.teams[actual.home] : null;
+  const a = actual.away ? WC.teams[actual.away] : null;
+  const winner  = res.winner || '';
+  const decided = !!winner;
+  const hw = decided && winner === actual.home;
+  const aw = decided && winner === actual.away;
+  const hScore = (res.home !== undefined && res.home !== '' && res.home != null) ? res.home : null;
+  const aScore = (res.away !== undefined && res.away !== '' && res.away != null) ? res.away : null;
+
+  const teamRow = (team, isWin, score) => `
+    <div class="bkt-team-line">
+      <div class="bkt-slot${team ? ' filled' : ''}${isWin ? ' winner' : ''}">
+        ${team
+          ? `${flagImg(team, 'bkt-flag')}<span class="bkt-tname">${team.name}</span>`
+          : `<span class="bkt-tbd">TBD</span>`}
+      </div>
+      <span class="bkt-score-display">${score != null ? score : '–'}</span>
+    </div>`;
+
+  // Overlay: the signed-in player's pick for this slot and what it scored.
+  let overlay = '';
+  if (S.user) {
+    const sp = koSlotPoints(roundId, idx, S.koPredictions);
+    const myPick = (S.koPredictions[roundId] || [])[idx] || {};
+    const myWinner = myPick.winner ? (WC.teams[myPick.winner]?.name || myPick.winner) : '—';
+    if (decided) {
+      const cls = sp.correctWinner ? 'correct' : 'incorrect';
+      const badge = sp.correctWinner
+        ? `+${sp.pts}pts${sp.exactScore ? ' ⚡' : ''} ✓`
+        : '0pts ✗';
+      overlay = `<div class="bkt-overlay ${cls}">
+          <span class="bkt-overlay-pick" title="Your prediction">Your pick: <strong>${esc(myWinner)}</strong></span>
+          <span class="bkt-overlay-badge">${badge}</span>
+        </div>`;
+    } else {
+      overlay = `<div class="bkt-overlay pending">
+          <span class="bkt-overlay-pick" title="Your prediction">Your pick: <strong>${esc(myWinner)}</strong></span>
+        </div>`;
+    }
+  }
+
+  return `<div class="bkt-card bkt-res-card${decided ? ' has-winner' : ''}">
+    <div class="bkt-card-top"><span class="bkt-mnum">${getQualifierLabel(roundId, idx)}</span></div>
+    ${teamRow(h, hw, hScore)}
+    ${teamRow(a, aw, aScore)}
+    ${overlay}
+  </div>`;
+}
 
 function setKoScore(roundId, idx, side, val) {
   if (!S.koPredictions[roundId]) return;

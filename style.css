@@ -1149,6 +1149,41 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
 
 .bkt-lock { font-size: 13px; }
 
+/* ── Results tab: official bracket + your-picks overlay ── */
+.bkt-res-summary {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+.bkt-res-summary strong { color: var(--green); font-size: 16px; }
+.bkt-res-summary-sub { color: var(--text-sub); font-size: 12px; font-weight: 400; }
+
+/* Result cards are read-only and a touch shorter than the editable ones */
+.bkt-res-card { min-height: 0; padding-bottom: 12px; }
+
+/* Per-match overlay strip: your pick + what it scored */
+.bkt-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+}
+.bkt-overlay-pick { color: var(--text-sub); }
+.bkt-overlay-pick strong { color: var(--text); }
+.bkt-overlay-badge { font-weight: 700; white-space: nowrap; }
+.bkt-overlay.correct   .bkt-overlay-badge { color: var(--green); }
+.bkt-overlay.incorrect .bkt-overlay-badge { color: var(--red); }
+.bkt-overlay.correct   { border-top-color: rgba(125,194,66,0.45); }
+.bkt-overlay.pending   { color: var(--text-sub); }
+
 /* Team line: team cell + score input on one row */
 .bkt-team-line {
   display: flex;
