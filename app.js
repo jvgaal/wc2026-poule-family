@@ -1508,8 +1508,10 @@ function resultBktCard(roundId, idx) {
     }
   }
 
+  const when = koMatchDate(roundId, idx);
   return `<div class="bkt-card bkt-res-card${decided ? ' has-winner' : ''}">
     <div class="bkt-card-top"><span class="bkt-mnum">${getQualifierLabel(roundId, idx)}</span></div>
+    ${when ? `<div class="bkt-mdate">🕒 ${when} <span class="bkt-mtz">MYT</span></div>` : ''}
     ${teamRow(h, hw, hScore)}
     ${teamRow(a, aw, aScore)}
     ${overlay}
@@ -1589,6 +1591,22 @@ function getQualifierLabel(roundId, matchIdx) {
 
 function getQualifierGroupsForR32(matchIdx) {
   return R32_PAIRINGS[matchIdx] || null;
+}
+
+// The official FIFA match number for a bracket slot. R32's slots follow the
+// pairing order (R32_MATCH_NUMBERS); every later round is contiguous from its
+// round's startMatch. Used to look up the kickoff time in KO_SCHEDULE.
+function koMatchNumber(roundId, idx) {
+  if (roundId === 'r32') return R32_MATCH_NUMBERS[idx];
+  const r = WC.koRounds.find(x => x.id === roundId);
+  return r && r.startMatch != null ? r.startMatch + idx : null;
+}
+
+// Formatted Malaysia-time kickoff for a bracket slot, or '' if unknown.
+function koMatchDate(roundId, idx) {
+  const n = koMatchNumber(roundId, idx);
+  const iso = (typeof KO_SCHEDULE !== 'undefined' && n != null) ? KO_SCHEDULE[n] : null;
+  return iso ? fmtMatchDate(iso) : '';
 }
 
 // ══════════════════════════════════════════════════════
