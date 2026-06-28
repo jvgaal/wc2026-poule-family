@@ -1176,9 +1176,10 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
 
 /* In the dense R32/R16 columns the flex layout would otherwise shrink cards
    below their content height, clipping the "Your pick" overlay at the bottom.
-   Let result cards keep their natural height and grow the tree to fit so every
-   pick stays visible (fitBracket measures the real height on render). */
-#results-content .bkt-tree { height: auto; min-height: 1500px; }
+   Pin result cards to their natural height (flex-shrink:0) and give the tree
+   enough room for 8 R32 cards plus comfortable gaps — space-around then keeps
+   the rounds vertically aligned and leaves breathing space between cards. */
+#results-content .bkt-tree { height: 2000px; }
 #results-content .bkt-card { flex-shrink: 0; }
 
 /* Per-match overlay strip: your pick + what it scored */
