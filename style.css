@@ -1174,6 +1174,13 @@ html[data-theme="dark"] .actual-result { color: #c8c8c8; }
 /* Result cards are read-only and a touch shorter than the editable ones */
 .bkt-res-card { min-height: 0; padding-bottom: 12px; }
 
+/* In the dense R32/R16 columns the flex layout would otherwise shrink cards
+   below their content height, clipping the "Your pick" overlay at the bottom.
+   Let result cards keep their natural height and grow the tree to fit so every
+   pick stays visible (fitBracket measures the real height on render). */
+#results-content .bkt-tree { height: auto; min-height: 1500px; }
+#results-content .bkt-card { flex-shrink: 0; }
+
 /* Per-match overlay strip: your pick + what it scored */
 .bkt-overlay {
   display: flex;
