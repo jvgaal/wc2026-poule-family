@@ -2462,7 +2462,16 @@ function renderAdminKoResultGrid(roundId) {
   // so teams only appear once the feeding results are in (TBD otherwise).
   const matchups = resolveActualKoMatchups(roundId);
 
-  el.innerHTML = Array.from({ length: round.matches }, (_, i) => {
+  // Display the matches in kickoff order, but keep each card bound to its
+  // original data index `i` so scores/winners never move between slots.
+  // (KO_SCHEDULE ISO strings share one UTC offset, so a string sort is safe.)
+  const order = Array.from({ length: round.matches }, (_, i) => i).sort((a, b) => {
+    const ta = KO_SCHEDULE[koMatchNumber(roundId, a)] || '';
+    const tb = KO_SCHEDULE[koMatchNumber(roundId, b)] || '';
+    return ta < tb ? -1 : ta > tb ? 1 : a - b;
+  });
+
+  el.innerHTML = order.map(i => {
     const res  = resArr[i] || {};
     const mu   = matchups[i] || {};
     const homeTeam = mu.home ? WC.teams[mu.home] : null;
@@ -2470,9 +2479,10 @@ function renderAdminKoResultGrid(roundId) {
     const homeScore = res.home ?? '';
     const awayScore = res.away ?? '';
     const winner = res.winner || '';
+    const when = koMatchDate(roundId, i);
     return `
     <div class="result-entry-card">
-      <div class="result-entry-label">${round.name} · Match ${i + 1}</div>
+      <div class="result-entry-label">Match ${koMatchNumber(roundId, i) ?? i + 1}${when ? ` · ${when} MYT` : ''}</div>
       <div class="result-entry-row" style="margin-bottom:8px">
         <span>Match:</span>
         <span style="flex:1;text-align:center;font-weight:bold">
