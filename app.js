@@ -266,13 +266,15 @@ async function fetchRemote() {
     S.allUsers       = data.users        || [];
     S.allPredictions = data.predictions  || {};
     S.config         = data.config       || S.config;
-    // Keep results authoritative from the server, but never let an empty/missing
-    // server copy wipe results this device entered locally (e.g. admin scores
-    // not yet synced). Mirrors the predictions merge guard below.
+    // Merge results per-key: the server is authoritative for keys it has, but a
+    // key this device entered locally is NEVER dropped just because the server
+    // copy lacks it (e.g. an admin score whose saveResults POST hasn't landed
+    // yet, or failed transiently). Previously we replaced S.results wholesale,
+    // which silently wiped freshly-entered results on the next load — the QF
+    // "entered it 3 times, never remembered" bug. Mirrors the per-field
+    // predictions merge guard below.
     const serverResults = data.results || {};
-    if (Object.keys(serverResults).length > 0 || Object.keys(S.results).length === 0) {
-      S.results = serverResults;
-    }
+    S.results = { ...S.results, ...serverResults };
 
     // Update How to Play prizes from server config
     updateHowtoPrizes();
@@ -615,7 +617,10 @@ function calcScore(userId) {
     } else {
       const key = q.id;
       const pts = WC.scoring.bonus[key] || 0;
-      if (p.toString().toLowerCase() === r.toString().toLowerCase()) bonusPts += pts;
+      // normalizeName() trims, lowercases and strips accents/punctuation, so a
+      // legacy free-text admin answer ("Mbappe") still matches the canonical
+      // dropdown string ("Kylian Mbappé"). Team codes normalize to themselves.
+      if (normalizeName(p) === normalizeName(r)) bonusPts += pts;
     }
   });
 
@@ -2406,10 +2411,13 @@ function renderAdminBonusResultGrid() {
       input = `<input type="number" min="0" max="500" placeholder="e.g. 280"
                  value="${val}" onchange="saveBonusResult('${q.id}', this.value)"
                  style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px">`;
-    } else { // player (or any free-text)
-      input = `<input type="text" placeholder="Player name…"
-                 value="${esc(val)}" onchange="saveBonusResult('${q.id}', this.value)"
-                 style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px">`;
+    } else { // player — dropdown from the SAME list players pick from, so the
+             // admin's answer always matches a player's stored string exactly.
+      input = `<select onchange="saveBonusResult('${q.id}', this.value)"
+                 style="flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:6px">
+        <option value="">— Not decided —</option>
+        ${WC.playerList.map(p => `<option value="${esc(p)}" ${val === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+      </select>`;
     }
     return `
     <div class="result-entry-card">

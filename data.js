@@ -108,12 +108,15 @@ const WC = {
   },
 
   koRounds: [
-    { id: "r32",   name: "Round of 32",    short: "R32", matches: 16, pts: 2, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 73  },
-    { id: "r16",   name: "Round of 16",    short: "R16", matches: 8,  pts: 3, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 89  },
-    { id: "qf",    name: "Quarter-Finals", short: "QF",  matches: 4,  pts: 4, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 97  },
-    { id: "sf",    name: "Semi-Finals",    short: "SF",  matches: 2,  pts: 5, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 101 },
-    { id: "third", name: "3rd Place",      short: "3rd", matches: 1,  pts: 3, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 103 },
-    { id: "final", name: "Final",          short: "F",   matches: 1,  pts: 8, lockDate: "2026-06-16T23:59:00+02:00", startMatch: 104 },
+    // lockDate = each round's first kickoff (from KO_SCHEDULE below). Kept in
+    // sync with LOCK_DATES in Code.gs. Predictions for a round freeze at its
+    // first match; result entry is never lock-gated.
+    { id: "r32",   name: "Round of 32",    short: "R32", matches: 16, pts: 2, lockDate: "2026-06-28T15:00:00-04:00", startMatch: 73  },
+    { id: "r16",   name: "Round of 16",    short: "R16", matches: 8,  pts: 3, lockDate: "2026-07-04T13:00:00-04:00", startMatch: 89  },
+    { id: "qf",    name: "Quarter-Finals", short: "QF",  matches: 4,  pts: 4, lockDate: "2026-07-09T16:00:00-04:00", startMatch: 97  },
+    { id: "sf",    name: "Semi-Finals",    short: "SF",  matches: 2,  pts: 5, lockDate: "2026-07-14T15:00:00-04:00", startMatch: 101 },
+    { id: "third", name: "3rd Place",      short: "3rd", matches: 1,  pts: 3, lockDate: "2026-07-18T17:00:00-04:00", startMatch: 103 },
+    { id: "final", name: "Final",          short: "F",   matches: 1,  pts: 8, lockDate: "2026-07-19T15:00:00-04:00", startMatch: 104 },
   ],
 
   bonusQuestions: [
