@@ -60,6 +60,10 @@ const S = {
   saveTimer:        null,
   backendOk:        false,
   syncErrorShown:   false, // suppress repeat error toasts when backend is down
+  dirtyResults:     new Set(), // result keys with unsynced local edits (see queueResultSync)
+  resultSyncTimer:  null,      // debounce handle for result sync
+  resultSyncInFlight: false,   // true while a saveResults POST is running (serialize writes)
+  resultSyncPending:  false,   // an edit arrived mid-flight; flush again when the POST returns
 };
 
 // ══════════════════════════════════════════════════════
@@ -132,6 +136,10 @@ function loadLocal() {
     S.results          = JSON.parse(localStorage.getItem('wc26_results')) || {};
     S.config           = JSON.parse(localStorage.getItem('wc26_config'))  || { locked: {}, prizes: { p1:'TBA', p2:'TBA', p3:'TBA' } };
     S.isAdmin          = localStorage.getItem('wc26_is_admin') === '1';
+    // Unsynced result keys survive a reload so a result entered while the sync
+    // was failing (or before the tab was closed) is never clobbered by a stale
+    // server copy on the next load, and is re-flushed once admin is unlocked.
+    S.dirtyResults     = new Set(JSON.parse(localStorage.getItem('wc26_results_dirty') || '[]'));
     // Migrate nickname into the persistent store if not already there
     if (S.user?.id && S.user?.nickname) persistNickname(S.user.id, S.user.nickname);
   } catch(e) { /* corrupted data — start fresh */ }
@@ -211,6 +219,7 @@ function saveLocal() {
   localStorage.setItem('wc26_bonus',   JSON.stringify(S.bonusPredictions));
   localStorage.setItem('wc26_ko',      JSON.stringify(S.koPredictions));
   localStorage.setItem('wc26_results', JSON.stringify(S.results));
+  localStorage.setItem('wc26_results_dirty', JSON.stringify([...S.dirtyResults]));
   localStorage.setItem('wc26_config',  JSON.stringify(S.config));
 }
 
@@ -266,15 +275,20 @@ async function fetchRemote() {
     S.allUsers       = data.users        || [];
     S.allPredictions = data.predictions  || {};
     S.config         = data.config       || S.config;
-    // Merge results per-key: the server is authoritative for keys it has, but a
-    // key this device entered locally is NEVER dropped just because the server
-    // copy lacks it (e.g. an admin score whose saveResults POST hasn't landed
-    // yet, or failed transiently). Previously we replaced S.results wholesale,
-    // which silently wiped freshly-entered results on the next load — the QF
-    // "entered it 3 times, never remembered" bug. Mirrors the per-field
-    // predictions merge guard below.
+    // Merge results per-key, but NEVER let the server clobber a key that still
+    // has unsynced local edits (S.dirtyResults). Result values are compound —
+    // a whole knockout round is one key holding an array of matches — so a
+    // shallow "server wins" spread would replace the entire local array with a
+    // stale server copy whenever a saveResults POST landed out of order or
+    // failed. That was the QF "entered it 3 times, never remembered" bug.
+    // Rule: dirty key → keep local (authoritative until confirmed synced);
+    // otherwise → take the server value; local-only keys are always kept.
     const serverResults = data.results || {};
-    S.results = { ...S.results, ...serverResults };
+    const mergedResults = { ...S.results };
+    Object.entries(serverResults).forEach(([key, val]) => {
+      if (!S.dirtyResults.has(key)) mergedResults[key] = val;
+    });
+    S.results = mergedResults;
 
     // Update How to Play prizes from server config
     updateHowtoPrizes();
@@ -298,6 +312,11 @@ async function fetchRemote() {
       if (!server.ko)    server.ko    = S.koPredictions;
     }
     saveLocal();
+
+    // Re-flush any result edits that never confirmed before this load (e.g. a
+    // POST that failed, or the tab closed mid-sync). Only fires once admin is
+    // unlocked; until then the dirty guard above keeps the local copy safe.
+    if (S.dirtyResults.size > 0 && S.adminPw) queueResultSync();
   } catch(e) {
     console.warn('Remote fetch failed:', e.message);
   }
@@ -333,8 +352,30 @@ async function syncRemote() {
   }
 }
 
-async function syncRemoteResults() {
+// Debounce + serialize result saves. Every admin edit used to fire its own
+// immediate POST of the full results blob; rapid edits raced, and because the
+// backend has no lock, a staler snapshot could land last and stick — then a
+// reload's merge re-imposed that stale copy. queueResultSync collapses a burst
+// of edits into a single POST and guarantees only one POST is in flight at a
+// time (coalescing any edits that arrive mid-flight), so the server always ends
+// up holding the latest snapshot.
+function queueResultSync() {
+  if (S.resultSyncTimer) clearTimeout(S.resultSyncTimer);
+  setStatus('saving');
+  S.resultSyncTimer = setTimeout(flushResultSync, 900);
+}
+
+async function flushResultSync() {
+  S.resultSyncTimer = null;
   if (!isBackendConfigured() || !S.adminPw) return;
+  // Serialize: if a POST is already running, remember to flush again when it
+  // returns so the very latest snapshot is what lands last.
+  if (S.resultSyncInFlight) { S.resultSyncPending = true; return; }
+  S.resultSyncInFlight = true;
+
+  // Snapshot the keys being synced so success only clears keys that were
+  // actually included — an edit made during the POST stays dirty and reflushes.
+  const syncedKeys = [...S.dirtyResults];
   setStatus('saving');
   try {
     // POST (not GET): the results blob is large and overflows a query string,
@@ -347,13 +388,23 @@ async function syncRemoteResults() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json().catch(() => ({}));
     if (data.error) throw new Error(data.error);
+    // Confirmed on the server — these keys are no longer at risk on reload.
+    syncedKeys.forEach(k => S.dirtyResults.delete(k));
+    saveLocal();
     setStatus('saved');
     mirrorAdminPost(form);
   } catch(e) {
     console.warn('Results save failed:', e.message);
+    // Keep keys dirty (they stay protected on reload) and retry after a delay.
     setStatus('error');
-    showToast('Could not save results — check your connection and try again', 'error');
+    showToast('Could not save results — retrying…', 'error');
+    S.resultSyncPending = true;
+    setTimeout(() => { S.resultSyncInFlight = false; if (S.resultSyncPending) { S.resultSyncPending = false; queueResultSync(); } }, 4000);
+    return;
   }
+  S.resultSyncInFlight = false;
+  // An edit arrived while this POST was running — flush the newer snapshot.
+  if (S.resultSyncPending) { S.resultSyncPending = false; queueResultSync(); }
 }
 
 async function syncRemoteConfig() {
@@ -2220,6 +2271,9 @@ async function unlockAdmin() {
   S.adminUnlocked = true;
   localStorage.setItem('wc26_is_admin', '1');
   S.isAdmin = true;
+  // Push any result edits that were entered before a reload (adminPw is
+  // memory-only, so they couldn't sync until this unlock).
+  if (S.dirtyResults.size > 0) queueResultSync();
   syncAdminVisibility();
   rebuildMobileNavItems();
   btn.disabled    = false;
@@ -2391,8 +2445,9 @@ function renderAdminResultGrid(groupId) {
 function saveResult(matchId, side, value) {
   if (!S.results[matchId]) S.results[matchId] = {};
   S.results[matchId][side] = value === '' ? undefined : +value;
+  S.dirtyResults.add(matchId);
   saveLocal();
-  syncRemoteResults();
+  queueResultSync();
 }
 
 function renderAdminBonusResultGrid() {
@@ -2437,8 +2492,9 @@ function saveBonusResult(qid, value) {
   } else {
     S.results[key] = value;
   }
+  S.dirtyResults.add(key);
   saveLocal();
-  syncRemoteResults();
+  queueResultSync();
   // Scores depend on bonus results, so refresh the standings if they're showing.
   if (S.activeTab === 'leaderboard') renderLeaderboard();
 }
@@ -2526,8 +2582,9 @@ function saveKoResult(roundId, idx, winner) {
   if (!S.results[`ko_${roundId}`]) S.results[`ko_${roundId}`] = [];
   if (!S.results[`ko_${roundId}`][idx]) S.results[`ko_${roundId}`][idx] = {};
   S.results[`ko_${roundId}`][idx].winner = winner;
+  S.dirtyResults.add(`ko_${roundId}`);
   saveLocal();
-  syncRemoteResults();
+  queueResultSync();
 }
 
 function saveKoResultScore(roundId, idx, side, val) {
@@ -2548,8 +2605,9 @@ function saveKoResultScore(roundId, idx, side, val) {
       res.winner = ''; // draw, no winner yet
     }
   }
+  S.dirtyResults.add(`ko_${roundId}`);
   saveLocal();
-  syncRemoteResults();
+  queueResultSync();
 }
 
 function renderPrizeInputs() {
