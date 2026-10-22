@@ -373,23 +373,34 @@ async function flushResultSync() {
   if (S.resultSyncInFlight) { S.resultSyncPending = true; return; }
   S.resultSyncInFlight = true;
 
-  // Snapshot the keys being synced so success only clears keys that were
-  // actually included — an edit made during the POST stays dirty and reflushes.
-  const syncedKeys = [...S.dirtyResults];
+  // Snapshot the exact VALUE of each dirty key at the moment we serialize the
+  // payload. On success we only clear a key if its value is still identical to
+  // what we actually sent — a key edited again while this POST was in flight
+  // (e.g. entering both semi-finals in quick succession, all under the one
+  // `ko_sf` key) differs from its snapshot, so it stays dirty, stays protected
+  // by the reload merge, and gets reflushed via resultSyncPending. Clearing by
+  // key NAME instead dropped those mid-flight edits and let a reload revert to
+  // the stale server copy — the "re-entered the semis 6 times" bug.
+  const payloadStr = JSON.stringify(S.results);
+  const sentSnapshot = {};
+  S.dirtyResults.forEach(k => { sentSnapshot[k] = JSON.stringify(S.results[k] ?? null); });
   setStatus('saving');
   try {
     // POST (not GET): the results blob is large and overflows a query string,
     // and the backend only accepts saveResults via doPost.
     const form = new FormData();
     form.append('action',  'saveResults');
-    form.append('payload', JSON.stringify(S.results));
+    form.append('payload', payloadStr);
     form.append('pw',      S.adminPw);
     const res  = await fetch(CONFIG.BACKEND_URL, { method: 'POST', body: form, redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json().catch(() => ({}));
     if (data.error) throw new Error(data.error);
-    // Confirmed on the server — these keys are no longer at risk on reload.
-    syncedKeys.forEach(k => S.dirtyResults.delete(k));
+    // Confirmed on the server — clear only keys whose value is unchanged since
+    // this POST began. Keys edited mid-flight remain dirty and reflush below.
+    Object.keys(sentSnapshot).forEach(k => {
+      if (JSON.stringify(S.results[k] ?? null) === sentSnapshot[k]) S.dirtyResults.delete(k);
+    });
     saveLocal();
     setStatus('saved');
     mirrorAdminPost(form);
